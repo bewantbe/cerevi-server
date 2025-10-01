@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.env
+.venv/
+venv/
+.env.*
+
+# Byte-compiled / optimized / DLL files
+*$py.class
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# VSCode
+.vscode/
+
+# Data
+backend/data/
+!backend/data/.gitkeep
+
+# Docker
+*.log
