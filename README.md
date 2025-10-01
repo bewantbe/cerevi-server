@@ -8,7 +8,6 @@ This repository contains the extracted backend portion of the original `old_cere
 - `docker-compose.yml` – Backend + Redis stack
 - `docker-compose.dev-backend.yml` – Development overlay (hot reload, no Redis)
 - `.env.example` – Example environment variables
-- `old_cerevi/` – Original project kept for reference (not used by the new stack)
 
 ## Quick Start (Docker)
 
