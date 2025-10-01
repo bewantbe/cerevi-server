@@ -34,13 +34,16 @@
                 "axes_order": "ZYX",
                 "RAS_coordinate": "Asr",
                 "tile_size_2d": [512, 512],
+                "tile_step_2d": 1,
+                "tile_thickness_2d": 1,
                 "tile_size_3d": [64, 64, 64],
                 "encoding_2d_list": [
-                    "raw-uint16",
-                    "zstd-uint8-sqrt_v1"
+                    "raw",
+                    "textr",
+                    "zstd_sqrt_v1"
                 ],
                 "encoding_3d_list": [
-                    "raw-uint16",
+                    "raw",
                     "h265"
                 ],
                 "description": "ims format 10um resolution"
@@ -71,12 +74,13 @@
                 "axes_order": "ZYX",
                 "RAS_coordinate": "Asr",
                 "tile_size_2d": [512, 512],
+                "tile_step_2d": 1,
                 "tile_size_3d": [64, 64, 64],
                 "encoding_2d_list": [
-                    "raw-uint8"
+                    "raw"
                 ],
                 "encoding_3d_list": [
-                    "raw-uint8"
+                    "raw"
                 ],
                 "description": "experimental label, data are not accurate"
             }
@@ -124,13 +128,15 @@
                 "axes_order": "ZYX",
                 "RAS_coordinate": "AsR",
                 "tile_size_2d": [512, 512],
+                "tile_step_2d": 1,
+                "tile_thickness_2d": 1,
                 "tile_size_3d": [64, 64, 64],
                 "encoding_2d_list": [
-                    "raw-uint16",
-                    "zstd-uint8-sqrt_v1"
+                    "raw",
+                    "zstd_sqrt_v1"
                 ],
                 "encoding_3d_list": [
-                    "raw-uint16",
+                    "raw",
                     "h265"
                 ],
                 "description": "ims format 10um resolution"
@@ -167,13 +173,15 @@
                 "axes_order": "ZYX",
                 "RAS_coordinate": "ARS",
                 "tile_size_2d": [512, 512],
+                "tile_step_2d": 1,
+                "tile_thickness_2d": 1,
                 "tile_size_3d": [64, 64, 64],
                 "encoding_2d_list": [
-                    "raw-uint16",
-                    "zstd-uint8-sqrt_v1"
+                    "raw",
+                    "zstd_sqrt_v1"
                 ],
                 "encoding_3d_list": [
-                    "raw-uint16",
+                    "raw",
                     "h265"
                 ],
                 "description": "ims format 10um resolution"
