@@ -1,6 +1,6 @@
 {
-    "macaque_brain_RM009": {
-        "id": "macaque_brain_RM009",
+    "RM009": {
+        "id": "RM009",
         "name": "Macaque Brain RM009",
         "species": "Macaca mulatta",
         "description": "High-resolution macaque brain imaging with VISoR technology",
@@ -101,8 +101,8 @@
             "specimens": "macaque_brain_dMRI_atlas_CIVM"
         }
     },
-    "mouse_body_Thy1-EGFP-F": {
-        "id": "mouse_body_Thy1-EGFP-F",
+    "MO001": {
+        "id": "MO001",
         "name": "Mouse Body Thy1-EGFP-F",
         "species": "Mouse",
         "description": "(not provided)",
@@ -146,8 +146,8 @@
         "mesh": {},
         "atlas_reference": {}
     },
-    "human_brain_BB001": {
-        "id": "human_brain_BB001",
+    "BB001": {
+        "id": "BB001",
         "name": "Human Brain BB001",
         "species": "Human",
         "description": "Human brain",
