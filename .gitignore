@@ -20,10 +20,6 @@ htmlcov/
 # VSCode
 .vscode/
 
-# Data
-backend/data/
-!backend/data/.gitkeep
-
 # Docker
 *.log
 

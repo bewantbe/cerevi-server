@@ -93,7 +93,7 @@
                 ],
                 "axes_order": "ZYX",
                 "RAS_coordinate": "Asr",
-                "encoding": "zip-obj",
+                "encoding_list": ["zip-obj"],
                 "description": "brain shell of the whole brain"
             }
         },
