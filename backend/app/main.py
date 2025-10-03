@@ -10,7 +10,13 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 from .config import settings
-from .api import specimens, tiles, regions, metadata
+from .api import (
+    new_api,          # redesigned endpoints
+    specimens,        # legacy specimen endpoints (kept during migration)
+    metadata as legacy_metadata,
+    tiles as legacy_tiles,
+    regions as legacy_regions,
+)
 
 
 # Configure logging
@@ -82,11 +88,14 @@ async def root():
         "docs": "/docs" if settings.debug else "Documentation disabled in production"
     }
 
-# Include API routers
-app.include_router(specimens.router, prefix="/api", tags=["specimens"])
-app.include_router(tiles.router, prefix="/api", tags=["tiles"])
-app.include_router(regions.router, prefix="/api", tags=["regions"])
-app.include_router(metadata.router, prefix="/api", tags=["metadata"])
+# Include legacy /api endpoints for backward compatibility (migration phase)
+app.include_router(specimens.router, prefix="/api", tags=["specimens (legacy)"])
+app.include_router(legacy_metadata.router, prefix="/api", tags=["metadata (legacy)"])
+app.include_router(legacy_tiles.router, prefix="/api", tags=["tiles (legacy)"])
+app.include_router(legacy_regions.router, prefix="/api", tags=["regions (legacy)"])
+
+# Include redesigned unified endpoints (no /api prefix)
+app.include_router(new_api.router, tags=["v2"])
 
 if __name__ == "__main__":
     uvicorn.run(
