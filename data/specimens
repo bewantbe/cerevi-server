@@ -6,7 +6,7 @@
         "description": "High-resolution macaque brain imaging with VISoR technology",
         "image": {
             "image.ims": {
-                "source": "image.ims",
+                "source": "macaque_brain/RM009.vsr/visor_ims_images/image.ims",
                 "pixel_format": "uint16",
                 "physical_size_um": [72300, 60000, 70000],
                 "origin_um": [0, 0, 0],
@@ -51,7 +51,7 @@
         },
         "region_mask": {
             "V1": {
-                "source": "atlas.ims",
+                "source": "macaque_brain/RM009.vsr/visor_atlas_images/atlas.ims",
                 "pixel_format": "uint8",
                 "physical_size_um": [21000, 14000, 14400],
                 "origin_um": [0, 0, 0],
@@ -87,7 +87,7 @@
         },
         "mesh": {
             "brain_shell.obj": {
-                "source": "brain_shell.obj",
+                "source": "macaque_brain/RM009.vsr/visor_mesh_images/brain_shell.obj",
                 "resolution_um_list": [
                     10.0
                 ],

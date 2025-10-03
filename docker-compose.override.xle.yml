@@ -1,0 +1,10 @@
+# override file only for xws
+# needed for softlink to work
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.override.xle.yml up --build
+
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - /media/xyy/Extreme SSD/data:/app/data:ro
