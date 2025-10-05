@@ -123,7 +123,7 @@
             }
         },
         "mesh": {
-            "brain_shell.obj": {
+            "test-v1": {
                 "data_provider": {
                     "pathes": [
                         "macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_shell.obj"

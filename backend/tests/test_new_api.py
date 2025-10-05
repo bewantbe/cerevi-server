@@ -31,8 +31,8 @@ def test_metadata_specimens():
     assert 'RM009' in data
     sa = data['RM009']
     assert 'image' in sa
-    assert "VISoR" in sa['image']
-    assert "RAS_coordinate" in sa['image']['VISoR']
+    assert "recon-v2" in sa['image']
+    assert "RAS_coordinate" in sa['image']['recon-v2']
 
 
 def test_metadata_regions():

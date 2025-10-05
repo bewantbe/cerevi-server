@@ -84,6 +84,11 @@ class ParsedDataId:
             raise ValueError("coords values must be integers") from e
         return z, y, x
 
+def FirstValue(d: Dict[str, Any]) -> Any:
+    """Helper to get the first value from a dict, or None if empty."""
+    if not d:
+        return None
+    return next(iter(d.values()))
 
 class DataService:
     """Service for redesigned API interactions."""
@@ -129,8 +134,12 @@ class DataService:
     def get_regions_metadata(self, specimen_id: str) -> Dict[str, Any]:
         # For now RM009 maps to CIVM atlas path; Use specimen atlas_reference/specimens field.
         specimen_meta = self.get_specimen_meta(specimen_id)
-        atlas_ref = specimen_meta.get('atlas_reference', {})
-        regions_path = self.data_root / atlas_ref['dir_path'] / atlas_ref['source']['regions']
+        atlas_ref = specimen_meta.get('atlas_reference')
+        if atlas_ref is None:
+            raise ValueError(f"Specimen {specimen_id} has no valid atlas reference")
+        atlas_meta = self.get_specimen_meta(atlas_ref)
+        data_provider = FirstValue(atlas_meta['regions'])["data_provider"]
+        regions_path = self.data_root / data_provider["pathes"][data_provider['region_list'][0][0]]
         if not regions_path.exists():
             raise FileNotFoundError(f"Regions metadata file not found: {regions_path}")
         with open(regions_path, 'r', encoding='utf-8') as f:
@@ -171,7 +180,7 @@ class DataService:
             raise ValueError("_resolve_ims_path only supports img/msk")
         if not images:
             raise FileNotFoundError(f"No {'image' if modality=='img' else 'region_mask'} data for specimen {specimen_id}")
-        first_entry = next(iter(images.values()))  # value is metadata dict
+        first_entry = FirstValue(images)  # value is metadata dict
         rel_source = Path(first_entry['source'])
         ims_path = self.data_root / rel_source
         if not ims_path.exists():
@@ -201,9 +210,18 @@ class DataService:
         meshes = meta.get('mesh', {})
         if not meshes:
             raise FileNotFoundError(f"No mesh data for specimen {specimen_id}")
-        first_entry = next(iter(meshes.values()))
-        rel_source = self.data_root / first_entry['dir_path']
-        mesh_path = rel_source / first_entry['source'].get(region_id, None)
+        first_entry = FirstValue(meshes)
+        data_provider = first_entry.get('data_provider')
+        mesh_pathes = data_provider.get('pathes', [])
+        view_types = '3d'
+        ok = False
+        for fidx, res_lv, region_list in data_provider.get(view_types, []):
+            if region_id in region_list:
+                ok = True
+                break
+        if not ok:
+            raise FileNotFoundError(f"Region '{region_id}' not found in mesh data for specimen {specimen_id}")
+        mesh_path = self.data_root / mesh_pathes[fidx]
         if not mesh_path:
             raise FileNotFoundError(f"No mesh source for region '{region_id}' in specimen {specimen_id}")
         if not mesh_path.exists():
