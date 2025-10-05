@@ -5,12 +5,28 @@
         "species": "Macaca mulatta",
         "description": "High-resolution macaque brain imaging with VISoR technology",
         "image": {
-            "VISoR": {
-                "dir_path": "macaque_brain/RM009/VISoR/RM009.vsr",
-                "source": {
-                    "3d_1um":  "visor_recon_images/yzj_slices_20251002.zarr",
-                    "3d_10um": "visor_recon_images/yzj_brain_10x_20250904.zarr",
-                    "xy_1um":  "xyy_xy_20251004.zarr"
+            "recon-v2": {
+                "data_provider": {
+                    "pathes": [
+                        "macaque_brain/RM009/VISoR/RM009.vsr/visor_recon_images/yzj_slices_20251002.zarr",
+                        "macaque_brain/RM009/VISoR/RM009.vsr/visor_recon_images/yzj_brain_10x_20250904.zarr",
+                        "macaque_brain/RM009/VISoR/RM009.vsr/xyy_xy_20251004.zarr",
+                        "macaque_brain/RM009/VISoR-ims/resampled_10um.ims"
+                    ],
+                    "3d": [
+                        [0, [0], [0,1,2,3]],
+                        [1, [1,2,3,4,5,6,7], [0,1,2,3]]
+                    ],
+                    "xy": [
+                        [2, [0], [0,1,2,3]],
+                        [1, [1,2,3,4,5,6,7], [0,1,2,3]]
+                    ],
+                    "yz": [
+                        [1, [1,2,3,4,5,6,7], [0,1,2,3]]
+                    ],
+                    "xz": [
+                        [1, [1,2,3,4,5,6,7], [0,1,2,3]]
+                    ]
                 },
                 "pixel_format": "uint16",
                 "physical_size_um": [72300, 60000, 70000],
@@ -33,8 +49,8 @@
                         "marker": "Autofluorescence"
                     }
                 ],
-                "resolution_um_list": [
-                    1.0
+                "resolutions_um": [
+                    1.0, 10.0, 20.0, 40.0, 80.0, 160.0, 320.0, 640.0
                 ],
                 "axes_order": "ZYX",
                 "RAS_coordinate": "Asr",
@@ -42,69 +58,36 @@
                 "tile_step_2d": 20,
                 "tile_thickness_2d": 20,
                 "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
+                "encodings_2d": [
                     "fp16",
                     "textr",
                     "zstd_sqrt_v1"
                 ],
-                "encoding_3d_list": [
+                "encodings_3d": [
                     "fp16",
                     "h265"
                 ],
-                "description": "1um recon"
-            },
-            "VISoR-ims": {
-                "dir_path": "macaque_brain/RM009/VISoR-ims",
-                "source": {
-                    "3d": "resampled_10um.ims"
-                },
-                "pixel_format": "uint16",
-                "physical_size_um": [72300, 60000, 70000],
-                "origin_um": [0, 0, 0],
-                "channels": [
-                    {
-                        "wavelength": "405",
-                        "marker": "DAPI"
-                    },
-                    {
-                        "wavelength": "488",
-                        "marker": "AAV-eGFP"
-                    },
-                    {
-                        "wavelength": "561",
-                        "marker": "AAV-mCherry"
-                    },
-                    {
-                        "wavelength": "640",
-                        "marker": "Autofluorescence"
-                    }
-                ],
-                "resolution_um_list": [
-                    10.0, 20.0, 40.0, 80.0, 160.0, 320.0, 640.0
-                ],
-                "axes_order": "ZYX",
-                "RAS_coordinate": "Asr",
-                "tile_size_2d": [512, 512],
-                "tile_step_2d": 1,
-                "tile_thickness_2d": 1,
-                "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
-                    "fp16",
-                    "textr",
-                    "zstd_sqrt_v1"
-                ],
-                "encoding_3d_list": [
-                    "fp16",
-                    "h265"
-                ],
-                "description": "ims format 10um resolution"
+                "description": "recon v2"
             }
         },
         "region_mask": {
             "V1": {
-                "dir_path": "macaque_brain/RM009/VISoR-ims",
-                "source": {
-                    "3d": "mask_v1.ims"
+                "data_provider": {
+                    "pathes": [
+                        "macaque_brain/RM009/VISoR-ims/mask_v1.ims"
+                    ],
+                    "3d": [
+                        [0, [0,1,2,3,4,5], [0]]
+                    ],
+                    "xy": [
+                        [0, [0,1,2,3,4,5], [0]]
+                    ],
+                    "yz": [
+                        [0, [0,1,2,3,4,5], [0]]
+                    ],
+                    "xz": [
+                        [0, [0,1,2,3,4,5], [0]]
+                    ]
                 },
                 "pixel_format": "uint8",
                 "physical_size_um": [21000, 14000, 14400],
@@ -122,7 +105,7 @@
                         }
                     }
                 ],
-                "resolution_um_list": [
+                "resolutions_um": [
                     4.0, 8.0, 16.0, 32.0, 64.0, 128.0
                 ],
                 "axes_order": "ZYX",
@@ -130,10 +113,10 @@
                 "tile_size_2d": [512, 512],
                 "tile_step_2d": 1,
                 "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
+                "encodings_2d": [
                     "raw"
                 ],
-                "encoding_3d_list": [
+                "encodings_3d": [
                     "raw"
                 ],
                 "description": "experimental label, data are not accurate"
@@ -141,11 +124,18 @@
         },
         "mesh": {
             "brain_shell.obj": {
-                "dir_path": "macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh",
-                "source": {
-                    "brain_shell": "brain_shell.obj"
+                "data_provider": {
+                    "pathes": [
+                        "macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_shell.obj"
+                    ],
+                    "3d": [
+                        [0, [0], ["brain_shell"]]
+                    ],
+                    "xy": [],
+                    "yz": [],
+                    "xz": []
                 },
-                "resolution_um_list": [
+                "resolutions_um": [
                     10.0
                 ],
                 "axes_order": "ZYX",
@@ -154,11 +144,23 @@
                 "description": "collection of 10um brain area mesh"
             }
         },
-        "atlas_reference": {
-            "dir_path": "macaque_brain/ATLAS/dMRI_CIVM",
-            "source": {
-                "regions": "macaque_brain_regions.json",
-                "copyright": "copyright"
+        "atlas_reference": "dMRI_CIVM"
+    },
+    "dMRI_CIVM": {
+        "id": "dMRI_CIVM",
+        "name": "Macaque Brain dMRI_CIVM Atlas",
+        "species":"Macaca mulatta",
+        "description": "MRI atlas",
+        "regions": {
+            "published": {
+                "data_provider": {
+                    "pathes": [
+                        "macaque_brain/ATLAS/dMRI_CIVM/macaque_brain_regions.json",
+                        "macaque_brain/ATLAS/dMRI_CIVM/copyright"
+                    ],
+                    "region_list": [[0]],
+                    "copyright": [[1]]
+                }
             }
         }
     },
@@ -168,10 +170,28 @@
         "species": "Mouse",
         "description": "(not provided)",
         "image": {
-            "VISoR": {
-                "dir_path": "mouse_body/MW001/VISoR/MW001.vsr",
-                "source": {
-                    "3d": "visor_recon_images/yzj_body_4x_20250903.zarr"
+            "recon-v1": {
+                "data_provider": {
+                    "pathes": [
+                        "mouse_body/MW001/VISoR/MW001.vsr/visor_recon_images/yzj_body_4x_20250903.zarr",
+                        "mouse_body/MW001/VISoR-ims/resampled_4um.ims"
+                    ],
+                    "3d": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ],
+                    "xy": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ],
+                    "yz": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ],
+                    "xz": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ]
                 },
                 "pixel_format": "uint16",
                 "physical_size_um": [76400, 30000, 36000],
@@ -189,7 +209,7 @@
                     }
                 ],
                 "resolution_um": [
-                  4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0
+                    4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0
                 ],
                 "axes_order": "ZYX",
                 "RAS_coordinate": "AsR",
@@ -197,50 +217,11 @@
                 "tile_step_2d": 1,
                 "tile_thickness_2d": 1,
                 "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
+                "encodings_2d": [
                     "raw",
                     "zstd_sqrt_v1"
                 ],
-                "encoding_3d_list": [
-                    "raw",
-                    "h265"
-                ],
-                "description": "ims format 10um resolution"
-            },
-            "VISoR-ims": {
-                "dir_path": "mouse_body/MW001/VISoR-ims",
-                "source": {
-                    "3d": "resampled_4um.ims"
-                },
-                "pixel_format": "uint16",
-                "physical_size_um": [76400, 30000, 36000],
-                "origin_um": [0, 0, 0],
-                "channels": [
-                    {
-                        "wavelength": "488",
-                        "marker": "Thy1-EGFP",
-                        "description": "neuron"
-                    },
-                    {
-                        "wavelength": "647",
-                        "marker": "LEL-Dylight649",
-                        "description": "blood vessel"
-                    }
-                ],
-                "resolution_um": [
-                  4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0
-                ],
-                "axes_order": "ZYX",
-                "RAS_coordinate": "AsR",
-                "tile_size_2d": [512, 512],
-                "tile_step_2d": 1,
-                "tile_thickness_2d": 1,
-                "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
-                    "raw",
-                    "zstd_sqrt_v1"
-                ],
-                "encoding_3d_list": [
+                "encodings_3d": [
                     "raw",
                     "h265"
                 ],
@@ -257,10 +238,28 @@
         "species": "Homo sapiens",
         "description": "Human brain",
         "image": {
-            "VISoR": {
-                "dir_path": "human_brain/BB001/VISoR/BB001.vsr",
-                "source": {
-                    "3d_10um": "visor_recon_images/yzj_brain_10x_20250910.zarr"
+            "recon-v1": {
+                "data_provider": {
+                    "pathes": [
+                        "human_brain/BB001/VISoR/BB001.vsr/visor_recon_images/yzj_brain_10x_20250910.zarr",
+                        "human_brain/BB001/VISoR-ims/resampled_10um.ims"
+                    ],
+                    "3d": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ],
+                    "xy": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ],
+                    "yz": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ],
+                    "xz": [
+                        [0, [0,1,2,3,4,5,6], [0,1]],
+                        [1, [0,1,2,3,4,5,6], [0,1]]
+                    ]
                 },
                 "pixel_format": "uint16",
                 "physical_size_um": [106500, 100000, 80000],
@@ -284,52 +283,15 @@
                 "tile_step_2d": 1,
                 "tile_thickness_2d": 1,
                 "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
+                "encodings_2d": [
                     "raw",
                     "zstd_sqrt_v1"
                 ],
-                "encoding_3d_list": [
+                "encodings_3d": [
                     "raw",
                     "h265"
                 ],
                 "description": "zarr format data"
-            },
-            "VISoR-ims": {
-                "dir_path": "human_brain/BB001/VISoR-ims",
-                "source": {
-                    "3d": "resampled_10um.ims"
-                },
-                "pixel_format": "uint16",
-                "physical_size_um": [106500, 100000, 80000],
-                "origin_um": [0, 0, 0],
-                "channels": [
-                    {
-                        "wavelength": "405",
-                        "marker": "DAPI"
-                    },
-                    {
-                        "wavelength": "640",
-                        "marker": "Nissl"
-                    }
-                ],
-                "resolution_um": [
-                  10.0, 20.0, 40.0, 80.0, 160.0, 320.0, 640.0
-                ],
-                "axes_order": "ZYX",
-                "RAS_coordinate": "ARS",
-                "tile_size_2d": [512, 512],
-                "tile_step_2d": 1,
-                "tile_thickness_2d": 1,
-                "tile_size_3d": [64, 64, 64],
-                "encoding_2d_list": [
-                    "raw",
-                    "zstd_sqrt_v1"
-                ],
-                "encoding_3d_list": [
-                    "raw",
-                    "h265"
-                ],
-                "description": "ims format 10um resolution"
             }
         },
         "region_mask": {},

@@ -74,7 +74,7 @@ class ParsedDataId:
             return ViewType.VOLUMETRIC
         return None  # unsupported
 
-    def coords_tuple(self) -> Tuple[int, int, int]:
+    def index_tuple(self) -> Tuple[int, int, int]:
         parts = self.pos_index.split(',') if self.pos_index else []
         if len(parts) != 3:
             raise ValueError("coords must be z,y,x for img/msk requests")
@@ -220,9 +220,9 @@ class DataService:
             raise ValueError("resolution_level required for img/msk requests")
         if parsed.channel is None and parsed.modality == 'img':
             raise ValueError("channel required for img requests")
-        z, y, x = parsed.coords_tuple()
+        z, y, x = parsed.index_tuple()
         ims_path = self._resolve_ims_path(parsed.specimen_id, parsed.modality)
-        channel = parsed.channel or 0
+        channel = parsed.channel
         tile_size = self._get_tile_size(parsed.specimen_id, parsed.modality)
         with ImarisHandler(ims_path) as h:
             tile = h.get_tile(view_type, parsed.res_level, channel, z, y, x, tile_size=tile_size)
