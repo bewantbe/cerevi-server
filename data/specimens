@@ -143,15 +143,15 @@
             "brain_shell.obj": {
                 "dir_path": "macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh",
                 "source": {
-                    "3d": "brain_shell.obj"
+                    "brain_shell": "brain_shell.obj"
                 },
                 "resolution_um_list": [
                     10.0
                 ],
                 "axes_order": "ZYX",
                 "RAS_coordinate": "Asr",
-                "encoding": "zip-obj",
-                "description": "brain shell of the whole brain"
+                "encoding": "obj",
+                "description": "collection of 10um brain area mesh"
             }
         },
         "atlas_reference": {

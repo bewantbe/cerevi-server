@@ -196,14 +196,16 @@ class DataService:
         except Exception:
             return 512
 
-    def _resolve_mesh_path(self, specimen_id: str) -> Path:
+    def _resolve_mesh_path(self, specimen_id: str, region_id: str) -> Path:
         meta = self.get_specimen_meta(specimen_id)
         meshes = meta.get('mesh', {})
         if not meshes:
             raise FileNotFoundError(f"No mesh data for specimen {specimen_id}")
         first_entry = next(iter(meshes.values()))
-        rel_source = Path(first_entry['source'])
-        mesh_path = self.data_root / rel_source
+        rel_source = self.data_root / first_entry['dir_path']
+        mesh_path = rel_source / first_entry['source'].get(region_id, None)
+        if not mesh_path:
+            raise FileNotFoundError(f"No mesh source for region '{region_id}' in specimen {specimen_id}")
         if not mesh_path.exists():
             raise FileNotFoundError(f"Mesh file not found: {mesh_path}")
         return mesh_path
@@ -245,5 +247,5 @@ class DataService:
             raise
 
     def get_mesh_bytes(self, parsed: ParsedDataId) -> bytes:
-        mesh_path = self._resolve_mesh_path(parsed.specimen_id)
+        mesh_path = self._resolve_mesh_path(parsed.specimen_id, parsed.pos_index)
         return mesh_path.read_bytes()
