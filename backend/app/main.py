@@ -4,20 +4,14 @@ Main FastAPI application for VISoR Platform
 
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from .middleware.conditional_gzip import ConditionalGZipMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
 from .config import settings
-from .api import (
-    new_api,          # redesigned endpoints
-    specimens,        # legacy specimen endpoints (kept during migration)
-    metadata as legacy_metadata,
-    tiles as legacy_tiles,
-    regions as legacy_regions,
-)
-
+from .api import new_api
 
 # Configure logging
 logging.basicConfig(
@@ -57,6 +51,10 @@ app.add_middleware(
     allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers     = ["*"],
 )
+
+# Enable automatic gzip compression for responses when the client supports it.
+# Minimum size controls when compression is applied (in bytes).
+app.add_middleware(ConditionalGZipMiddleware, minimum_size=1024)
 
 # Global exception handler
 @app.exception_handler(Exception)

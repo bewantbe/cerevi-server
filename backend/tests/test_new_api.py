@@ -5,7 +5,7 @@ basic schema expectations hold. Tile / mesh retrieval are attempted only if
 underlying data files exist (skip otherwise).
 """
 
-import sys, os, json
+import sys, os, json, gzip
 import pytest
 from fastapi.testclient import TestClient
 
@@ -80,3 +80,28 @@ def test_data_mesh():
     else:
         assert r.status_code == 200
         assert 'text/plain' in r.headers['content-type']
+
+
+def test_json_compression():
+    # Request specimens JSON with gzip accept header and ensure server gzips JSON responses
+    headers = {'Accept-Encoding': 'gzip'}
+    r = client.get('/metadata', params={'type': 'specimens'}, headers=headers)
+    if r.status_code == 404:
+        pytest.skip('Specimens metadata missing in test environment')
+    assert r.status_code == 200
+
+    # Server should indicate gzip encoding when it compressed the response
+    enc = r.headers.get('Content-Encoding', '')
+    assert 'gzip' in enc.lower()
+
+    body = r.content
+    # If the TestClient auto-decompressed, content won't start with gzip magic.
+    if body[:2] == b'\x1f\x8b':
+        decompressed = gzip.decompress(body)
+    else:
+        # Already decompressed by client
+        decompressed = body
+
+    # Ensure decompressed bytes are valid JSON
+    data = json.loads(decompressed)
+    assert isinstance(data, dict)

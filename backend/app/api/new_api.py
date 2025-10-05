@@ -1,16 +1,17 @@
-"""Redesigned API router exposing unified /metadata and /data endpoints.
+"""Unified /metadata and /data endpoints.
 
 Endpoints:
   GET /metadata?type=specimens
   GET /metadata?type=regions&specimen={specimen_id}
   GET /data/{data_id}
 
-The legacy /api/* was to be removed.
+See README.md for details.
 """
 
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import JSONResponse, Response
 import logging
+from typing import Literal
 
 from ..services.data_service import DataService
 
@@ -21,8 +22,8 @@ data_service = DataService()
 
 
 @router.get('/metadata')
-async def redesigned_metadata(
-        type: str = Query(..., description="Metadata type: specimens | regions"),
+async def fetch_metadata(
+        type: Literal["specimens", "regions"] = Query(..., description="Metadata type: specimens | regions"),
         specimen: str | None = Query(None, description="Specimen ID for regions")):
     try:
         if type == 'specimens':
@@ -46,15 +47,15 @@ async def redesigned_metadata(
 
 
 @router.get('/data/{data_id}')
-async def redesigned_data(data_id: str):
+async def fetch_data_piece(data_id: str):
     try:
         parsed = data_service.parse_data_id(data_id)
         if parsed.modality in ('img', 'msk'):
             bytes_out = data_service.get_tile_bytes(parsed)
-            media = 'image/jpeg' if parsed.modality == 'img' else 'image/png'
-            return Response(content=bytes_out, media_type=media)
+            # return raw bytes and let the receiver interpret the format (e.g. uint16 raw)
+            # use a generic binary content type instead of forcing jpeg/png
+            return Response(content=bytes_out, media_type='application/octet-stream')
         if parsed.modality == 'meh':
-            # Mesh (view token normally '3')
             mesh_bytes = data_service.get_mesh_bytes(parsed)
             return Response(content=mesh_bytes, media_type='text/plain')
         raise HTTPException(status_code=400, detail='Unsupported modality')
