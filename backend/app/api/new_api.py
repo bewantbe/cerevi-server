@@ -2,10 +2,10 @@
 
 Endpoints:
   GET /metadata?type=specimens
-  GET /metadata?type=regions&specimen=RM009
+  GET /metadata?type=regions&specimen={specimen_id}
   GET /data/{data_id}
 
-This co-exists with legacy /api/* endpoints during migration.
+The legacy /api/* was to be removed.
 """
 
 from fastapi import APIRouter, Query, HTTPException
@@ -21,8 +21,9 @@ data_service = DataService()
 
 
 @router.get('/metadata')
-async def redesigned_metadata(type: str = Query(..., description="Metadata type: specimens | regions"),
-                               specimen: str | None = Query(None, description="Specimen ID for regions")):
+async def redesigned_metadata(
+        type: str = Query(..., description="Metadata type: specimens | regions"),
+        specimen: str | None = Query(None, description="Specimen ID for regions")):
     try:
         if type == 'specimens':
             specimens = data_service.load_specimens_metadata()

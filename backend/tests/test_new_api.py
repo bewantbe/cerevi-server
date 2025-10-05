@@ -28,9 +28,11 @@ def test_metadata_specimens():
     assert r.status_code == 200
     data = r.json()
     assert isinstance(data, dict)
-    assert 'RM009' in data  # from provided sample file
-    rm = data['RM009']
-    assert 'image' in rm
+    assert 'RM009' in data
+    sa = data['RM009']
+    assert 'image' in sa
+    assert "VISoR" in sa['image']
+    assert "RAS_coordinate" in sa['image']['VISoR']
 
 
 def test_metadata_regions():
@@ -42,7 +44,7 @@ def test_metadata_regions():
     assert 'regions' in data or 'hierarchy' in data or isinstance(data, dict)
 
 
-@pytest.mark.parametrize('view_token', ['c', 's', 'h'])
+@pytest.mark.parametrize('view_token', ['xz', 'yz', 'xy'])
 def test_data_image_tile(view_token):
     # Attempt to fetch tile at origin for level 0 channel 0
     data_id = f'RM009:img{view_token}:0:0:0,0,0'
@@ -59,7 +61,7 @@ def test_data_image_tile(view_token):
 
 
 def test_data_mask_tile():
-    data_id = 'RM009:mskc:0:0:0,0,0'
+    data_id = 'RM009:mskxz:0:0:0,0,0'
     r = client.get(f'/data/{data_id}')
     if r.status_code in (400, 404):
         pytest.skip('Mask atlas file not present')
@@ -69,7 +71,7 @@ def test_data_mask_tile():
 
 
 def test_data_mesh():
-    data_id = 'RM009:meh3:::v1'
+    data_id = 'RM009:meh3d:::v1'
     r = client.get(f'/data/{data_id}')
     if r.status_code == 404:
         pytest.skip('Mesh file not present')

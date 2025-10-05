@@ -21,41 +21,41 @@ from .api import (
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, settings.log_level),
-    format=settings.log_format
+    level  = getattr(logging, settings.log_level),
+    format = settings.log_format
 )
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
-    # Startup
-    logger.info("Starting VISoR Platform API")
-    logger.info(f"Data path: {settings.data_path}")
+    # FastAPI app startup
+    logger.info(f"Starting {settings.app_name}, version {settings.app_version}")
+    logger.info(f"Data path: {settings.data_root_path}")
     logger.info(f"Debug mode: {settings.debug}")
     
     yield
     
-    # Shutdown
-    logger.info("Shutting down VISoR Platform API")
+    # FastAPI app shutdown
+    logger.info(f"Shutting down {settings.app_name} API")
 
 # Create FastAPI application
 app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-    description="API for VISoR (Volumetric Imaging with Synchronized on-the-fly-scan and Readout) Platform",
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
-    lifespan=lifespan
+    title       = settings.app_name,
+    version     = settings.app_version,
+    description = settings.app_description,
+    docs_url    = "/docs" if settings.debug else None,
+    redoc_url   = "/redoc" if settings.debug else None,
+    lifespan    = lifespan
 )
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_origins     = settings.cors_origins,
+    allow_credentials = True,
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers     = ["*"],
 )
 
 # Global exception handler
@@ -75,7 +75,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.app_version,
-        "data_path_exists": settings.data_path.exists()
+        "data_root_path_exists": settings.data_root_path.exists()
     }
 
 # Root endpoint
@@ -83,25 +83,19 @@ async def health_check():
 async def root():
     """Root endpoint"""
     return {
-        "message": "VISoR Platform API",
+        "message": settings.app_name,
         "version": settings.app_version,
         "docs": "/docs" if settings.debug else "Documentation disabled in production"
     }
 
-# Include legacy /api endpoints for backward compatibility (migration phase)
-app.include_router(specimens.router, prefix="/api", tags=["specimens (legacy)"])
-app.include_router(legacy_metadata.router, prefix="/api", tags=["metadata (legacy)"])
-app.include_router(legacy_tiles.router, prefix="/api", tags=["tiles (legacy)"])
-app.include_router(legacy_regions.router, prefix="/api", tags=["regions (legacy)"])
-
 # Include redesigned unified endpoints (no /api prefix)
-app.include_router(new_api.router, tags=["v2"])
+app.include_router(new_api.router, tags=[settings.app_api_version])
 
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug,
-        log_level=settings.log_level.lower()
+        host      = settings.host,
+        port      = settings.port,
+        reload    = settings.debug,
+        log_level = settings.log_level.lower()
     )

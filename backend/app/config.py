@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # Application info
     app_name: str = "VISoR Platform API"
     app_version: str = "1.0.0"
+    app_description: str = "API for VISoR (Volumetric Imaging with Synchronized on-the-fly-scan and Readout) Platform"
+    app_api_version: str = "v2"
     debug: bool = False
     
     # Server settings
@@ -33,7 +35,7 @@ class Settings(BaseSettings):
     ]
     
     # Data paths
-    data_path: Path = Field(default_factory=lambda: Path(os.getenv("DATA_PATH", "data")))
+    data_root_path: Path = Field(default_factory=lambda: Path(os.getenv("DATA_PATH", "data")))
     # Atlas path for region data
     # Updated path to reflect actual nested directory structure after data migration
     atlas_civm_path: Path = Field(default_factory=lambda: Path(os.getenv("DATA_PATH", "data")) / "macaque_brain" / "dMRI_atlas_CIVM")
@@ -91,8 +93,8 @@ class Settings(BaseSettings):
         # data/macaque_brain/RM009.vsr/...
         # Provide a simple mapping for known specimens so existing tests pass.
         if specimen_id == 'macaque_brain_RM009':
-            return self.data_path / 'macaque_brain' / 'RM009.vsr'
-        return self.data_path / specimen_id
+            return self.data_root_path / 'macaque_brain' / 'RM009.vsr'
+        return self.data_root_path / specimen_id
     
     def get_image_path(self, specimen_id: str) -> Path:
         """Get the path to the image file for a specimen"""

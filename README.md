@@ -21,8 +21,7 @@ specimen_id = RM009 | ...
 image_type = {modality}{view_type}[-{encoding}]
     * modality: img | msk | meh
         Query `/metadata?type=specimens` for availability, img = "image", msk = "region_mask", meh = "mesh"
-    * view_type: c | s | h | 3
-        c,s,h,3 = coronal, sagittal, horizontal, 3D
+    * view_type: xy | yz | xz | 3d
     * encoding: optional (raw | zstd_sqrt_v1 | textr | obj | ...)
         Query `/metadata?type=specimens` for availability, "encoding_2d_list", "encoding_3d_list", "encoding_list".
         If omitted, defaults to "raw" for img and msk, "obj" for meh.
@@ -40,8 +39,8 @@ index = {z},{y},{x} | {region_name} | {region_name},{z} ...
 
 Examples:
 ```
-GET /data/RM009:imgc:0:0:43200,512,1536   # Coronal image tile (RAW)
-GET /data/RM009:mskc:0:0:43200,512,1536   # Coronal mask tile (RAW)
+GET /data/RM009:imgxy:0:0:43200,512,1536  # xy plane image tile (RAW by default)
+GET /data/RM009:mskxy:0:0:43200,512,1536  # xy mask tile (RAW)
 GET /data/RM009:meh3:::v1                 # Mesh (OBJ text)
 ```
 
@@ -85,6 +84,13 @@ Tear down:
 docker-compose down -v
 ```
 
+If use of SSHFS is desired
+```bash
+sudo sshfs autocv172:/mnt/share_read_only/cerevi ~/code/cerevi-server/data -o allow_other
+# then docker-compose up backend
+# otherwise you get mkdir file exists error
+```
+
 ## Local (Without Docker)
 
 ```bash
@@ -122,32 +128,38 @@ Some tests may skip if large data files aren't present.
 ## Data Directory Layout
 
 ```
-data/
+cerevi/
+├── specimens                                            # contract between backend and frontend
 └── macaque_brain
-    ├── RM009.vsr                                 # RM009 specimen data (entity-based organization)
-    │   ├── visor_recon_images                    # 
-    │   │       └── yzj_brain_10x_20250904.zarr   # Multi-resolution image data, master tape
-    │   ├── visor_textr_images                    # 
-    │   │       ├── coronal.zarr     # optimized for coronal-section access
-    │   │       ├── sagittal.zarr                 # optimized for sagittal-section access
-    │   │       ├── horizontal.zarr               # optimized for horizontal-section access
-    │   │       └── 3d.zarr                       # optimized for volumetric access, e.g. codec ktx2
-    │   ├── visor_h265_images                     # 
-    │   │       └── 3d.zarr                       # optimized for volumetric access, e.g. codec ktx2
-    │   ├── visor_ims_images                      # 
-    │   │       └── image.ims                     # Multi-resolution image data, lower resolution
-    │   ├── visor_atlas_images                    # 
-    │   │       └── atlas.ims                     # Brain region masks (brain area ID as pixel)
-    │   ├── visor_mesh_images                     # 
-    │   │       └── brain_shell.obj               # 3D brain surface model
-    │   ├── info.json                             # Basic information about the specimen
-    │   ├── metadata.json                         # custom metadata
-    │   └── copyright                             # Attribution and copyright information
-    └── dMRI_atlas_CIVM/    # CIVM atlas data
-        ├── macaque_brain_regions.json    # Hierarchical region structure (names as json)
-        ├── macaque_brain_regions.xlsx    # Source atlas data (names as Excel, for generating json only)
-        ├── atlas.ims   (not yet)            # Brain region masks (brain area ID as pixel)
-        └── copyright                     # Attribution and copyright information
+     ├── ATLAS
+     │    └── dMRI_CIVM/                                 # CIVM atlas data
+     │         ├── macaque_brain_regions.json            # Hierarchical region structure (names as json)
+     │         ├── macaque_brain_regions.xlsx            # Source atlas data (names as Excel, for generating json only)
+     │         ├── atlas.ims   (not yet)                 # Brain region masks (brain area ID as pixel)
+     │         └── copyright                             # Attribution and copyright information
+     └──RM009
+         ├── MRI
+         │    └── ...
+         ├── VISoR-ims
+         │    ├── resampled_10um.ims
+         │    └── mask_v1.ims                            # Brain region masks (brain area ID as pixel)
+         ├── VISoR-tif
+         │    └── ... 
+         └── VISoR
+              └── RM009.vsr                              # RM009 specimen data (entity-based organization)
+                   ├── visor_recon_images                # 
+                   │    └── yzj_brain_10x_20250904.zarr  # Multi-resolution image data, master tape
+                   ├── visor_projn_images                # 
+                   │    ├── xy.zarr                      # optimized for xy-section access
+                   │    ├── yz.zarr                      # optimized for yz-section access
+                   │    └── xz.zarr                      # optimized for xz-section access
+                   ├── visor_h265_images                 # 
+                   │    └── 3d.zarr                      # optimized for volumetric access, e.g. codec ktx2
+                   ├── visor_mesh
+                   │    └── brain_shell.obj              # 3D brain surface model
+                   ├── info.json                         # Basic information about the specimen
+                   ├── metadata.json                     # custom metadata
+                   └── copyright                         # Attribution and copyright information
 ```
 
 

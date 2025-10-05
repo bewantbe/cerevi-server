@@ -10,10 +10,13 @@ Responsible for:
 data_id schema (See redesign spec):
   {specimen_id}:{image_type}:{resolution_level}:{channel}:{coords}
 
-  image_type = {modality}{view_type}[-{encoding}]
-    modality: img | msk | meh
-    view_type: c | s | h | 3 (3 for volumetric / mesh)
-    encoding (optional): raw | zstd_sqrt_v1 | textr | obj | ...
+    image_type = {modality}{view_type}[-{encoding}]
+        modality: img | msk | meh
+        view_type: xy | yz | xz | 3d  (3d for volumetric / mesh)
+            xy = horizontal (Z slicing)
+            yz = sagittal   (X slicing)
+            xz = coronal    (Y slicing)
+        encoding (optional): raw | zstd_sqrt_v1 | textr | obj | ...
 
   resolution_level, channel may be omitted (empty) for mesh requests OR
   future volumetric fetches. We tolerate blank fields.
@@ -51,20 +54,21 @@ logger = logging.getLogger(__name__)
 class ParsedDataId:
     specimen_id: str
     modality: str  # img | msk | meh
-    view_token: str  # c | s | h | 3
+    view_token: str  # xy | yz | xz | 3d
     encoding: Optional[str]
     resolution_level: Optional[int]
     channel: Optional[int]
     d_index: str
 
     def view_type(self) -> Optional[ViewType]:
-        if self.view_token == 'c':
+        # Map new tokens to ViewType enum
+        if self.view_token == 'xz':
             return ViewType.CORONAL
-        if self.view_token == 's':
+        if self.view_token == 'yz':
             return ViewType.SAGITTAL
-        if self.view_token == 'h':
+        if self.view_token == 'xy':
             return ViewType.HORIZONTAL
-        if self.view_token == '3':
+        if self.view_token == '3d':
             return ViewType.VOLUMETRIC
         return None  # unsupported
 
@@ -117,7 +121,8 @@ class DataService:
         return regions_json
 
     # -------------------- data_id Parsing --------------------
-    _IMAGE_TYPE_RE = re.compile(r'^(?P<mod>img|msk|meh)(?P<view>[csh3])(?:-(?P<enc>[A-Za-z0-9_]+))?$')
+    # Accept new multi-char view tokens (xy|yz|xz|3d). Keep legacy single char (c|s|h|3) for backward compatibility.
+    _IMAGE_TYPE_RE = re.compile(r'^(?P<mod>img|msk|meh)(?P<view>xy|yz|xz|3d|c|s|h|3)(?:-(?P<enc>[A-Za-z0-9_]+))?$')
 
     def parse_data_id(self, data_id: str) -> ParsedDataId:
         parts = data_id.split(':')
@@ -130,6 +135,9 @@ class DataService:
         encoding = m.group('enc')
         modality = m.group('mod')
         view_token = m.group('view')
+        # Normalize legacy tokens to new ones for internal consistency
+        legacy_map = {'c': 'xz', 's': 'yz', 'h': 'xy', '3': '3d'}
+        view_token = legacy_map.get(view_token, view_token)
         resolution_level = int(rl_raw) if rl_raw.strip() != '' else None
         channel = int(ch_raw) if ch_raw.strip() != '' else None
         return ParsedDataId(
@@ -196,7 +204,7 @@ class DataService:
             raise ValueError("get_tile_bytes only for img/msk modalities")
         view_type = parsed.view_type()
         if view_type is None:
-            raise ValueError("View type required (c/s/h) for img/msk requests")
+            raise ValueError("View type required (xy|yz|xz) for img/msk requests")
         if parsed.resolution_level is None:
             raise ValueError("resolution_level required for img/msk requests")
         if parsed.channel is None and parsed.modality == 'img':

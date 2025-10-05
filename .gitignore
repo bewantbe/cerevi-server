@@ -25,3 +25,6 @@ htmlcov/
 
 # external files
 /old_cerevi
+
+/data
+!!data/specimens

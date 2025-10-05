@@ -53,7 +53,7 @@ class TestBackendIntegration:
         from app.config import settings
         
         # Check if data directories exist
-        assert settings.data_path.exists(), f"Data path does not exist: {settings.data_path}"
+        assert settings.data_root_path.exists(), f"Data path does not exist: {settings.data_root_path}"
         macaque_path = settings.get_specimen_path("macaque_brain_RM009")
         assert macaque_path.exists(), f"Macaque RM009 path does not exist: {macaque_path}"
         assert settings.atlas_civm_path.exists(), f"Atlas CIVM path does not exist: {settings.atlas_civm_path}"
