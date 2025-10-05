@@ -13,17 +13,18 @@ data_id schema (See redesign spec):
     image_type = {modality}{view_type}[-{encoding}]
         modality: img | msk | meh
         view_type: xy | yz | xz | 3d  (3d for volumetric / mesh)
-            xy = horizontal (Z slicing)
-            yz = sagittal   (X slicing)
-            xz = coronal    (Y slicing)
+            xy = return image data on xy plane (usually coronal)
+            yz = return image data on yz plane (usually sagittal)
+            xz = return image data on xz plane (usually horizontal)
+            3d = return volumetric data or 3D mesh.
         encoding (optional): raw | zstd_sqrt_v1 | textr | obj | ...
 
-  resolution_level, channel may be omitted (empty) for mesh requests OR
-  future volumetric fetches. We tolerate blank fields.
+  resolution_level, channel may be omitted (empty) for mesh requests.
 
   coords forms:
     z,y,x  -> tile origin (required for img/msk 2D slice)
-    region_name | region_name,z (NOT implemented yet – placeholder)
+    region_name -> return mesh for named region
+    region_name,depth_idx ->  return 2D polygon for the region at depth_idx (NOT implemented yet)
 
 Limitations / Assumptions:
   - We pick the first available image / region_mask / mesh entry in metadata
@@ -46,6 +47,7 @@ import logging
 
 from ..models.specimen import ViewType
 from .imaris_handler import ImarisHandler
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -53,27 +55,27 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParsedDataId:
     specimen_id: str
-    modality: str  # img | msk | meh
-    view_token: str  # xy | yz | xz | 3d
-    encoding: Optional[str]
-    resolution_level: Optional[int]
-    channel: Optional[int]
-    d_index: str
+    modality:    str  # img | msk | meh
+    view_token:  str  # xy | yz | xz | 3d
+    encoding:    Optional[str]
+    res_level:   Optional[int]
+    channel:     Optional[int]
+    pos_index:   str
 
     def view_type(self) -> Optional[ViewType]:
         # Map new tokens to ViewType enum
         if self.view_token == 'xz':
-            return ViewType.CORONAL
+            return ViewType.HORIZONTAL
         if self.view_token == 'yz':
             return ViewType.SAGITTAL
         if self.view_token == 'xy':
-            return ViewType.HORIZONTAL
+            return ViewType.CORONAL
         if self.view_token == '3d':
             return ViewType.VOLUMETRIC
         return None  # unsupported
 
     def coords_tuple(self) -> Tuple[int, int, int]:
-        parts = self.d_index.split(',') if self.d_index else []
+        parts = self.pos_index.split(',') if self.pos_index else []
         if len(parts) != 3:
             raise ValueError("coords must be z,y,x for img/msk requests")
         try:
@@ -87,18 +89,35 @@ class DataService:
     """Service for redesigned API interactions."""
 
     def __init__(self, data_root: Path | None = None):
-        self.data_root = data_root or Path('data')
+        # Default to configured data root from settings if not provided
+        self.data_root = data_root or settings.data_root_path
         self._specimens_cache: Optional[Dict[str, Any]] = None
 
     # -------------------- Metadata Loading --------------------
-    def load_specimens_metadata(self, force: bool = False) -> Dict[str, Any]:
-        if self._specimens_cache is None or force:
-            specimens_file = self.data_root / 'specimens'
-            if not specimens_file.exists():
-                raise FileNotFoundError(f"Specimens metadata file not found: {specimens_file}")
+    def load_specimens_metadata(self) -> Dict[str, Any]:
+        """Load specimens metadata and cache it.
+
+        The cache is invalidated when the underlying `data_root/specimens` file's
+        modification time changes.
+        """
+        specimens_file = self.data_root / 'specimens'
+        if not specimens_file.exists():
+            raise FileNotFoundError(f"Specimens metadata file not found: {specimens_file}")
+
+        # Use file mtime to determine whether to reload cache
+        try:
+            mtime = specimens_file.stat().st_mtime
+        except Exception:
+            # If stat fails for some reason, fallback to reloading when cache is empty
+            mtime = None
+
+        if self._specimens_cache is None or getattr(self, '_specimens_mtime', None) != mtime:
             with open(specimens_file, 'r', encoding='utf-8') as f:
                 self._specimens_cache = json.load(f)
-            logger.info("Loaded specimens metadata: %d entries", len(self._specimens_cache))
+            # Store mtime for future invalidation checks
+            self._specimens_mtime = mtime
+            logger.info("Loaded specimens metadata: %d entries (mtime=%s)", len(self._specimens_cache), mtime)
+
         return self._specimens_cache
 
     def get_specimen_meta(self, specimen_id: str) -> Dict[str, Any]:
@@ -110,14 +129,12 @@ class DataService:
     def get_regions_metadata(self, specimen_id: str) -> Dict[str, Any]:
         # For now RM009 maps to CIVM atlas path; Use specimen atlas_reference/specimens field.
         specimen_meta = self.get_specimen_meta(specimen_id)
-        atlas_ref = specimen_meta.get('atlas_reference', {}).get('specimens')
-        # Hard-coded current path structure (data/macaque_brain/dMRI_atlas_CIVM/...)
-        regions_path = self.data_root / 'macaque_brain' / 'dMRI_atlas_CIVM' / 'macaque_brain_regions.json'
+        atlas_ref = specimen_meta.get('atlas_reference', {})
+        regions_path = self.data_root / atlas_ref['dir_path'] / atlas_ref['source']['regions']
         if not regions_path.exists():
             raise FileNotFoundError(f"Regions metadata file not found: {regions_path}")
         with open(regions_path, 'r', encoding='utf-8') as f:
             regions_json = json.load(f)
-        # Potentially filter / adapt per specimen later.
         return regions_json
 
     # -------------------- data_id Parsing --------------------
@@ -128,26 +145,18 @@ class DataService:
         parts = data_id.split(':')
         if len(parts) != 5:
             raise ValueError("data_id must have 5 colon-separated segments")
-        specimen_id, image_type_token, rl_raw, ch_raw, coords = parts
+        specimen_id, image_type_token, rl_raw, ch_raw, pos_index = parts
         m = self._IMAGE_TYPE_RE.match(image_type_token)
         if not m:
             raise ValueError(f"Invalid image_type format: {image_type_token}")
-        encoding = m.group('enc')
-        modality = m.group('mod')
-        view_token = m.group('view')
-        # Normalize legacy tokens to new ones for internal consistency
-        legacy_map = {'c': 'xz', 's': 'yz', 'h': 'xy', '3': '3d'}
-        view_token = legacy_map.get(view_token, view_token)
-        resolution_level = int(rl_raw) if rl_raw.strip() != '' else None
-        channel = int(ch_raw) if ch_raw.strip() != '' else None
         return ParsedDataId(
-            specimen_id=specimen_id,
-            modality=modality,
-            view_token=view_token,
-            encoding=encoding,
-            resolution_level=resolution_level,
-            channel=channel,
-            d_index=coords
+            specimen_id = specimen_id,
+            modality    = m.group('mod'),
+            view_token  = m.group('view'),
+            encoding    = m.group('enc'),
+            res_level   = int(rl_raw) if rl_raw.strip() != '' else None,
+            channel     = int(ch_raw) if ch_raw.strip() != '' else None,
+            pos_index   = pos_index
         )
 
     # -------------------- Tile / Mesh Serving --------------------
@@ -205,7 +214,7 @@ class DataService:
         view_type = parsed.view_type()
         if view_type is None:
             raise ValueError("View type required (xy|yz|xz) for img/msk requests")
-        if parsed.resolution_level is None:
+        if parsed.res_level is None:
             raise ValueError("resolution_level required for img/msk requests")
         if parsed.channel is None and parsed.modality == 'img':
             raise ValueError("channel required for img requests")
@@ -214,7 +223,7 @@ class DataService:
         channel = parsed.channel or 0
         tile_size = self._get_tile_size(parsed.specimen_id, parsed.modality)
         with ImarisHandler(ims_path) as h:
-            tile = h.get_tile(view_type, parsed.resolution_level, channel, z, y, x, tile_size=tile_size)
+            tile = h.get_tile(view_type, parsed.res_level, channel, z, y, x, tile_size=tile_size)
         # Convert to image bytes (reuse TileService logic?) – implement lightweight here to avoid import cycle
         try:
             import numpy as np
