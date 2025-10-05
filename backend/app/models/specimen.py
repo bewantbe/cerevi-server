@@ -13,9 +13,10 @@ class CoordinateSystem(str, Enum):
 
 class ViewType(str, Enum):
     """Image view types"""
-    SAGITTAL = "sagittal"    # YZ plane (perpendicular to X-axis)
-    CORONAL = "coronal"      # XZ plane (perpendicular to Y-axis)
-    HORIZONTAL = "horizontal" # XY plane (perpendicular to Z-axis)
+    SAGITTAL   = "sagittal"     # YZ plane (perpendicular to X-axis)
+    CORONAL    = "coronal"      # XZ plane (perpendicular to Y-axis)
+    HORIZONTAL = "horizontal"   # XY plane (perpendicular to Z-axis)
+    VOLUMETRIC = "3d"           # 3D volume
 
 class SpecimenMetadata(BaseModel):
     """Specimen metadata model"""

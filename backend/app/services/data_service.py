@@ -55,7 +55,7 @@ class ParsedDataId:
     encoding: Optional[str]
     resolution_level: Optional[int]
     channel: Optional[int]
-    coords_raw: str
+    d_index: str
 
     def view_type(self) -> Optional[ViewType]:
         if self.view_token == 'c':
@@ -64,10 +64,12 @@ class ParsedDataId:
             return ViewType.SAGITTAL
         if self.view_token == 'h':
             return ViewType.HORIZONTAL
-        return None  # '3' volumetric or unsupported for 2D tile
+        if self.view_token == '3':
+            return ViewType.VOLUMETRIC
+        return None  # unsupported
 
     def coords_tuple(self) -> Tuple[int, int, int]:
-        parts = self.coords_raw.split(',') if self.coords_raw else []
+        parts = self.d_index.split(',') if self.d_index else []
         if len(parts) != 3:
             raise ValueError("coords must be z,y,x for img/msk requests")
         try:
@@ -137,7 +139,7 @@ class DataService:
             encoding=encoding,
             resolution_level=resolution_level,
             channel=channel,
-            coords_raw=coords
+            d_index=coords
         )
 
     # -------------------- Tile / Mesh Serving --------------------

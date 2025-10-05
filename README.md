@@ -25,7 +25,7 @@ image_type = {modality}{view_type}[-{encoding}]
         c,s,h,3 = coronal, sagittal, horizontal, 3D
     * encoding: optional (raw | zstd_sqrt_v1 | textr | obj | ...)
         Query `/metadata?type=specimens` for availability, "encoding_2d_list", "encoding_3d_list", "encoding_list".
-        Currently img and msk go with raw, meh goes with obj.
+        If omitted, defaults to "raw" for img and msk, "obj" for meh.
 
 resolution_level = 0, 1, 2, ...
     usually 0 = highest resolution, see `resolution_um_list` in `/metadata?type=specimens`
@@ -35,7 +35,7 @@ channel = 0, 1, 2, ...
 
 index = {z},{y},{x} | {region_name} | {region_name},{z} ...
     For 2D tiles and 3D blocks: z,y,x (voxel position).
-    For meshes: region_name (e.g. "brain_shell"), or region_name,z (2D region at specific z-plane).
+    For meshes: region_name (e.g. "brain_shell", "v1"), or {region_name},{z} (2D region at specific z-plane).
 ```
 
 Examples:
@@ -67,7 +67,7 @@ docker-compose up --build -d
 curl http://localhost:8000/health | jq
 
 # Specimens metadata
-curl -s 'localhost:8000/metadata?type=specimens' | jq
+curl -s 'http://localhost:8000/metadata?type=specimens' | jq
 ```
 
 To rebuild cleanly:
