@@ -46,6 +46,8 @@ import re
 import logging
 import numpy as np
 
+from PIL import Image
+from io import BytesIO
 import h5py
 import zarr
 
@@ -162,11 +164,20 @@ class DataService:
         m = self._IMAGE_TYPE_RE.match(image_type_token)
         if not m:
             raise ValueError(f"Invalid image_type format: {image_type_token}")
+        modality    = m.group('mod')
+        encoding    = m.group('enc')
+        if encoding is None:
+            if modality == 'img':
+                encoding = 'raw'  # default for img
+            elif modality == 'msk':
+                encoding = 'png'  # default for msk
+            elif modality == 'meh':
+                encoding = 'obj'  # default for meh
         return ParsedDataId(
             specimen_id = specimen_id,
-            modality    = m.group('mod'),
-            view_type  = m.group('view'),
-            encoding    = m.group('enc'),
+            modality    = modality,
+            view_type   = m.group('view'),
+            encoding    = encoding,
             res_level   = int(rl_raw) if rl_raw.strip() != '' else None,
             channel     = int(ch_raw) if ch_raw.strip() != '' else None,
             pos_index   = pos_index
@@ -224,29 +235,6 @@ class DataService:
         else:
             raise ValueError("Invalid view_type for tile size")
 
-    def _resolve_mesh_path(self, specimen_id: str, region_id: str) -> Path:
-        meta = self.get_specimen_meta(specimen_id)
-        meshes = meta.get('mesh', {})
-        if not meshes:
-            raise FileNotFoundError(f"No mesh data for specimen {specimen_id}")
-        first_entry = FirstValue(meshes)
-        data_provider = first_entry.get('data_provider')
-        mesh_pathes = data_provider.get('pathes', [])
-        view_types = '3d'
-        ok = False
-        for fidx, res_lv, region_list in data_provider.get(view_types, []):
-            if region_id in region_list:
-                ok = True
-                break
-        if not ok:
-            raise FileNotFoundError(f"Region '{region_id}' not found in mesh data for specimen {specimen_id}")
-        mesh_path = self.data_root / mesh_pathes[fidx]
-        if not mesh_path:
-            raise FileNotFoundError(f"No mesh source for region '{region_id}' in specimen {specimen_id}")
-        if not mesh_path.exists():
-            raise FileNotFoundError(f"Mesh file not found: {mesh_path}")
-        return mesh_path
-
     def _read_tile(self, img_path: Path, view_type: str, param: Tuple) -> np.ndarray:
         tile_size_0 = param[-1]
         if view_type == "xy":
@@ -289,10 +277,49 @@ class DataService:
         img_path, param = self._resolve_image_path(parsed.specimen_id, parsed.modality,
                                                    parsed.view_type, parsed.res_level, channel)
         tile = self._read_tile(img_path, parsed.view_type, param + ((z,y,x), tile_size))
-        img = np.clip(tile - 100, 0, 65500)          # remove background
-        img_fp32 = img.astype(np.float32)
-        img_fp16 = img_fp32.astype(np.float16)
-        return tile.tobytes()
+        if parsed.modality == 'img':
+            if not parsed.encoding == 'raw':
+                raise ValueError("Only raw encoding supported for img")
+            img = np.clip(tile - 100, 0, 65500)          # remove background
+            img_fp32 = img.astype(np.float32)
+            img_fp16 = img_fp32.astype(np.float16)
+            return img_fp16.tobytes()
+        elif parsed.modality == 'msk':
+            if not parsed.encoding == 'png':
+                raise ValueError("Only PNG encoding supported for msk")
+            # For mask, we assume PNG encoding; tile is uint16 labels
+            # Convert to uint8 for PNG (may lose some labels if >255)
+            assert tile.dtype == np.uint8
+            msk_uint8 = tile
+            img_pil = Image.fromarray(msk_uint8, mode='P')  # take first slice in z
+            with BytesIO() as output:
+                img_pil.save(output, format="PNG")
+                return output.getvalue()
+        else:
+            raise ValueError("Unsupported modality in get_tile_bytes")
+
+    def _resolve_mesh_path(self, specimen_id: str, region_id: str) -> Path:
+        meta = self.get_specimen_meta(specimen_id)
+        meshes = meta.get('mesh', {})
+        if not meshes:
+            raise FileNotFoundError(f"No mesh data for specimen {specimen_id}")
+        first_entry = FirstValue(meshes)
+        data_provider = first_entry.get('data_provider')
+        mesh_pathes = data_provider.get('pathes', [])
+        view_types = '3d'
+        ok = False
+        for fidx, res_lv, region_list in data_provider.get(view_types, []):
+            if region_id in region_list:
+                ok = True
+                break
+        if not ok:
+            raise FileNotFoundError(f"Region '{region_id}' not found in mesh data for specimen {specimen_id}")
+        mesh_path = self.data_root / mesh_pathes[fidx]
+        if not mesh_path:
+            raise FileNotFoundError(f"No mesh source for region '{region_id}' in specimen {specimen_id}")
+        if not mesh_path.exists():
+            raise FileNotFoundError(f"Mesh file not found: {mesh_path}")
+        return mesh_path
 
     def get_mesh_bytes(self, parsed: ParsedDataId) -> bytes:
         mesh_path = self._resolve_mesh_path(parsed.specimen_id, parsed.pos_index)
