@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 import logging
 from typing import Literal
 
+from ..config import settings
 from ..services.data_service import DataService
 
 router = APIRouter()
@@ -48,6 +49,7 @@ async def fetch_metadata(
 
 @router.get('/data/{data_id}')
 async def fetch_data_piece(data_id: str):
+    print(settings.data_root_path)
     try:
         parsed = data_service.parse_data_id(data_id)
         if parsed.modality in ('img', 'msk'):

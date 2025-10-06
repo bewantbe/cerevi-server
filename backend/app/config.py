@@ -10,7 +10,6 @@ from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
-
 class Settings(BaseSettings):
     # Application info
     app_name: str = "VISoR Platform API"

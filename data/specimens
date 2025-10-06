@@ -10,7 +10,7 @@
                     "pathes": [
                         "macaque_brain/RM009/VISoR/RM009.vsr/visor_recon_images/yzj_slices_20251002.zarr",
                         "macaque_brain/RM009/VISoR/RM009.vsr/visor_recon_images/yzj_brain_10x_20250904.zarr",
-                        "macaque_brain/RM009/VISoR/RM009.vsr/xyy_xy_20251004.zarr",
+                        "macaque_brain/RM009/VISoR/RM009.vsr/visor_projn_images/xyy_xy_20251004.zarr",
                         "macaque_brain/RM009/VISoR-ims/resampled_10um.ims"
                     ],
                     "3d": [
