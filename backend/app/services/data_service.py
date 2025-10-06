@@ -52,7 +52,6 @@ import h5py
 import zarr
 
 from ..models.specimen import ViewType
-from .imaris_handler import ImarisHandler
 from ..config import settings
 
 logger = logging.getLogger(__name__)

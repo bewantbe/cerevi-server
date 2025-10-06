@@ -1,23 +1,18 @@
 # Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-python-multipart==0.0.6
 
 # Data processing
 h5py==3.10.0
 zarr==3.1.3
-zarrs==0.2.0
 numpy==1.26.4
 Pillow==10.1.0
-pandas==2.1.3
 
 # Caching and database
-redis==5.0.1
-aioredis==2.0.1
+# (Redis related packages removed; no caching layer implemented yet)
 
 # HTTP client
-httpx==0.25.2
-aiofiles==23.2.1
+# (HTTP client / async file helpers removed; not used by current code)
 
 # Configuration and environment
 python-dotenv==1.0.0
@@ -25,8 +20,7 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # Image processing and utilities
-opencv-python-headless==4.8.1.78
-scikit-image==0.22.0
+# (Heavy image libs removed; tile extraction uses h5py/zarr + Pillow only)
 
 # Development and testing
 pytest==7.4.3
@@ -35,3 +29,10 @@ black==23.11.0
 isort==5.12.0
 
 # No additional CORS package needed - FastAPI has built-in CORS support
+
+# HTTP client, needed by test framework
+httpx==0.25.2
+aiofiles==23.2.1
+
+# NOTE: If future features add uploads, external HTTP calls, Redis caching,
+# or advanced image processing, re-add the corresponding dependencies.

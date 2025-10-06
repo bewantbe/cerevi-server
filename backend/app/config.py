@@ -117,29 +117,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-# Specimen configuration
-SPECIMENS_CONFIG = {
-    "macaque_brain_RM009": {
-        "id": "macaque_brain_RM009",
-        "name": "Macaque Brain RM009",
-        "species": "Macaca mulatta",
-        "description": "High-resolution macaque brain imaging with VISoR technology",
-        "has_image": True,
-        "has_atlas": True,
-        "has_model": True,
-        "channels": settings.default_channels,
-        "resolution_um": settings.image_resolution_um,
-        "coordinate_system": settings.coordinate_system,
-        "axes_order": settings.axes_order,
-    }
-}
-
-
-def get_specimen_config(specimen_id: str) -> Optional[Dict]:
-    """Get configuration for a specific specimen"""
-    return SPECIMENS_CONFIG.get(specimen_id)
-
-
-def get_all_specimens() -> List[Dict]:
-    """Get configuration for all available specimens"""
-    return list(SPECIMENS_CONFIG.values())
+## Legacy specimen configuration helpers removed.
+## The redesigned API now exclusively relies on the dynamic specimens metadata
+## JSON file located under data_root/specimens instead of static in-code
+## configurations. If needed in the future, they can be restored from git history.
