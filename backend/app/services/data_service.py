@@ -44,6 +44,10 @@ from typing import Dict, Any, Optional, Tuple
 import json
 import re
 import logging
+import numpy as np
+
+import h5py
+import zarr
 
 from ..models.specimen import ViewType
 from .imaris_handler import ImarisHandler
@@ -56,21 +60,21 @@ logger = logging.getLogger(__name__)
 class ParsedDataId:
     specimen_id: str
     modality:    str  # img | msk | meh
-    view_token:  str  # xy | yz | xz | 3d
+    view_type:   str  # xy | yz | xz | 3d
     encoding:    Optional[str]
     res_level:   Optional[int]
     channel:     Optional[int]
     pos_index:   str
 
-    def view_type(self) -> Optional[ViewType]:
+    def view_explain(self) -> Optional[ViewType]:
         # Map new tokens to ViewType enum
-        if self.view_token == 'xz':
+        if self.view_type == 'xz':
             return ViewType.HORIZONTAL
-        if self.view_token == 'yz':
+        if self.view_type == 'yz':
             return ViewType.SAGITTAL
-        if self.view_token == 'xy':
+        if self.view_type == 'xy':
             return ViewType.CORONAL
-        if self.view_token == '3d':
+        if self.view_type == '3d':
             return ViewType.VOLUMETRIC
         return None  # unsupported
 
@@ -161,7 +165,7 @@ class DataService:
         return ParsedDataId(
             specimen_id = specimen_id,
             modality    = m.group('mod'),
-            view_token  = m.group('view'),
+            view_type  = m.group('view'),
             encoding    = m.group('enc'),
             res_level   = int(rl_raw) if rl_raw.strip() != '' else None,
             channel     = int(ch_raw) if ch_raw.strip() != '' else None,
@@ -169,41 +173,56 @@ class DataService:
         )
 
     # -------------------- Tile / Mesh Serving --------------------
-    def _resolve_ims_path(self, specimen_id: str, modality: str) -> Path:
+    def _resolve_image_path(self, specimen_id: str, modality: str, view_type: str,
+                            res_level: int, channel: int) -> Path:
         meta = self.get_specimen_meta(specimen_id)
         if modality == 'img':
             images = meta.get('image', {})
         elif modality == 'msk':
-            # region_mask has nested mapping (like "V1": {...}) – pick first entry
             images = meta.get('region_mask', {})
         else:
             raise ValueError("_resolve_ims_path only supports img/msk")
         if not images:
             raise FileNotFoundError(f"No {'image' if modality=='img' else 'region_mask'} data for specimen {specimen_id}")
-        first_entry = FirstValue(images)  # value is metadata dict
-        rel_source = Path(first_entry['source'])
-        ims_path = self.data_root / rel_source
-        if not ims_path.exists():
-            raise FileNotFoundError(f"File not found: {ims_path}")
-        return ims_path
+        first_entry = FirstValue(images)
+        data_provider = first_entry.get('data_provider')
+        pathes = data_provider.get('pathes', [])
+        ok = False
+        # find which file provides the requested view_type, res_level, channel
+        for fidx, res_lv_list, ch_list in data_provider.get(view_type, []):
+            if (res_level in res_lv_list) and (channel in ch_list):
+                ok = True
+                break
+        if not ok:
+            raise FileNotFoundError(f"No matching {modality} data for view '{view_type}' at level {res_level} channel {channel} in specimen {specimen_id}")
+        img_path = self.data_root / pathes[fidx]
+        if not img_path.exists():
+            raise FileNotFoundError(f"File not found: {img_path}")
+        res_lv_idx = res_lv_list.index(res_level)
+        if img_path.suffix == '.zarr':
+            param = (str(res_lv_idx), channel)
+        elif img_path.suffix == '.ims':
+            param = ('DataSet', f'ResolutionLevel {res_lv_idx}', 'TimePoint 0', f'Channel {channel}', 'Data')
+        else:
+            raise ValueError(f"Unsupported image file format: {img_path.suffix}")
+        return img_path, param
 
-    def _get_tile_size(self, specimen_id: str, modality: str) -> int:
+    def _get_tile_size(self, specimen_id: str, modality: str, view_type: str) -> int:
         meta = self.get_specimen_meta(specimen_id)
         if modality == 'img':
             images = meta.get('image', {})
         else:
             images = meta.get('region_mask', {})
         if not images:
-            return 512
-        first_entry = next(iter(images.values()))
+            raise FileNotFoundError(f"No {'image' if modality=='img' else 'region_mask'} data for specimen {specimen_id}")
+        first_entry = FirstValue(images)
         # Try tile_size_2d first element; fall back to 512
-        ts = first_entry.get('tile_size_2d') or first_entry.get('tile_size_3d') or [512]
-        if isinstance(ts, list):
-            return int(ts[0])
-        try:
-            return int(ts)
-        except Exception:
-            return 512
+        if view_type == '3d':
+            return first_entry.get('tile_size_3d')
+        elif view_type in ('xy', 'yz', 'xz'):
+            return first_entry.get('tile_size_2d')
+        else:
+            raise ValueError("Invalid view_type for tile size")
 
     def _resolve_mesh_path(self, specimen_id: str, region_id: str) -> Path:
         meta = self.get_specimen_meta(specimen_id)
@@ -228,41 +247,52 @@ class DataService:
             raise FileNotFoundError(f"Mesh file not found: {mesh_path}")
         return mesh_path
 
+    def _read_tile(self, img_path: Path, view_type: str, param: Tuple) -> np.ndarray:
+        tile_size_0 = param[-1]
+        if view_type == "xy":
+            tile_size = (1, tile_size_0[0], tile_size_0[1])
+        elif view_type == "yz":
+            tile_size = (tile_size_0[0], tile_size_0[1], 1)
+        elif view_type == "xz":
+            tile_size = (tile_size_0[0], 1, tile_size_0[1])
+        elif view_type == "3d":
+            tile_size = tile_size_0
+        else:
+            raise ValueError(f"Unsupported view_type: {view_type}")
+        zyx = param[-2]
+        roi = tuple(slice(zyx[i], zyx[i] + tile_size[i]) for i in range(3))
+        if img_path.suffix == '.ims':
+            with h5py.File(img_path, 'r') as h5f:
+                harray = h5f[param[0]][param[1]][param[2]][param[3]][param[4]]
+                tile = harray[roi]
+        elif img_path.suffix == '.zarr':
+            with zarr.open(img_path, mode='r') as zf:
+                za = zf[param[0]]
+                tile = za[param[1], *roi]
+        else:
+            raise ValueError(f"Unsupported image file format: {img_path.suffix}")
+        return tile
+
     def get_tile_bytes(self, parsed: ParsedDataId) -> bytes:
         if parsed.modality not in ('img', 'msk'):
             raise ValueError("get_tile_bytes only for img/msk modalities")
-        view_type = parsed.view_type()
+        view_type = parsed.view_explain()
         if view_type is None:
             raise ValueError("View type required (xy|yz|xz) for img/msk requests")
         if parsed.res_level is None:
             raise ValueError("resolution_level required for img/msk requests")
         if parsed.channel is None and parsed.modality == 'img':
             raise ValueError("channel required for img requests")
-        z, y, x = parsed.index_tuple()
-        ims_path = self._resolve_ims_path(parsed.specimen_id, parsed.modality)
         channel = parsed.channel
-        tile_size = self._get_tile_size(parsed.specimen_id, parsed.modality)
-        with ImarisHandler(ims_path) as h:
-            tile = h.get_tile(view_type, parsed.res_level, channel, z, y, x, tile_size=tile_size)
-        # Convert to image bytes (reuse TileService logic?) – implement lightweight here to avoid import cycle
-        try:
-            import numpy as np
-            from PIL import Image
-            import io
-            arr = tile
-            if arr.dtype != 'uint8':
-                arr_max = arr.max() or 1
-                arr = (arr.astype('float32') / arr_max * 255).astype('uint8')
-            img = Image.fromarray(arr, mode='L')
-            buf = io.BytesIO()
-            if parsed.modality == 'img':
-                img.save(buf, format='JPEG', quality=85, optimize=True)
-            else:
-                img.save(buf, format='PNG', optimize=True)
-            return buf.getvalue()
-        except Exception as e:
-            logger.error("Failed to encode tile: %s", e)
-            raise
+        z, y, x = parsed.index_tuple()
+        tile_size = self._get_tile_size(parsed.specimen_id, parsed.modality, parsed.view_type)
+        img_path, param = self._resolve_image_path(parsed.specimen_id, parsed.modality,
+                                                   parsed.view_type, parsed.res_level, channel)
+        tile = self._read_tile(img_path, parsed.view_type, param + ((z,y,x), tile_size))
+        img = np.clip(tile - 100, 0, 65500)          # remove background
+        img_fp32 = img.astype(np.float32)
+        img_fp16 = img_fp32.astype(np.float16)
+        return tile.tobytes()
 
     def get_mesh_bytes(self, parsed: ParsedDataId) -> bytes:
         mesh_path = self._resolve_mesh_path(parsed.specimen_id, parsed.pos_index)

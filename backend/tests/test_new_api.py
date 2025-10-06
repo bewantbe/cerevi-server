@@ -50,7 +50,7 @@ def test_data_image_tile(view_token):
     data_id = f'RM009:img{view_token}:0:0:0,0,0'
     r = client.get(f'/data/{data_id}')
     if r.status_code == 404:
-        pytest.skip('Image .ims file not present')
+        pytest.skip('Image file not present')
     elif r.status_code == 400:
         # Could be unsupported view if data orientation missing; treat as skip
         pytest.skip('View unsupported in current test data')

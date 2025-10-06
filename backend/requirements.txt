@@ -5,7 +5,9 @@ python-multipart==0.0.6
 
 # Data processing
 h5py==3.10.0
-numpy==1.25.2
+zarr==3.1.3
+zarrs==0.2.0
+numpy==1.26.4
 Pillow==10.1.0
 pandas==2.1.3
 

@@ -54,7 +54,10 @@ async def fetch_data_piece(data_id: str):
             bytes_out = data_service.get_tile_bytes(parsed)
             # return raw bytes and let the receiver interpret the format (e.g. uint16 raw)
             # use a generic binary content type instead of forcing jpeg/png
-            return Response(content=bytes_out, media_type='application/octet-stream')
+            if parsed.modality == 'img':
+                return Response(content=bytes_out, media_type='application/octet-stream')
+            if parsed.modality == 'msk':
+                return Response(content=bytes_out, media_type='image/png')
         if parsed.modality == 'meh':
             mesh_bytes = data_service.get_mesh_bytes(parsed)
             return Response(content=mesh_bytes, media_type='text/plain')
