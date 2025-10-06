@@ -1,123 +1,50 @@
-"""
-Configuration settings for the VISoR Platform backend
+"""Minimal configuration used by the current redesigned API.
+
+All unused settings and legacy helpers were removed to reduce surface area.
+Only fields referenced in application code (main app setup & logging) remain.
 """
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
 class Settings(BaseSettings):
-    """Application settings"""
-    
     # Application info
     app_name: str = "VISoR Platform API"
     app_version: str = "1.0.0"
     app_description: str = "API for VISoR (Volumetric Imaging with Synchronized on-the-fly-scan and Readout) Platform"
     app_api_version: str = "v2"
     debug: bool = False
-    
-    # Server settings
+
+    # Server / network
     host: str = "0.0.0.0"
     port: int = 8000
-    
-    # CORS settings
     cors_origins: List[str] = [
         "http://localhost:3000",
-        "http://localhost:3001",  # Added for frontend development
+        "http://localhost:3001",
         "http://localhost:5173",
         "http://localhost:8080",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",
     ]
-    
-    # Data paths
+
+    # Data root (specimens metadata + assets)
     data_root_path: Path = Field(default_factory=lambda: Path(os.getenv("DATA_PATH", "data")))
-    # Atlas path for region data
-    # Updated path to reflect actual nested directory structure after data migration
-    atlas_civm_path: Path = Field(default_factory=lambda: Path(os.getenv("DATA_PATH", "data")) / "macaque_brain" / "dMRI_atlas_CIVM")
-    
-    # Redis settings
-    redis_url: str = "redis://redis:6379"
-    redis_db: int = 0
-    redis_max_connections: int = 10
-    
-    # Cache settings
-    cache_ttl_tiles: int = 3600  # 1 hour
-    cache_ttl_metadata: int = 86400  # 24 hours
-    cache_ttl_regions: int = 86400  # 24 hours
-    
-    # Image processing settings
-    default_tile_size: int = 512
-    max_resolution_level: int = 7
-    supported_formats: List[str] = ["png", "jpg", "jpeg"]
-    
-    # Coordinate system settings
-    coordinate_system: str = "right_handed"
-    axes_order: str = "zyx"  # Image array order
-    
-    # Channel settings
-    default_channels: Dict[str, str] = {
-        "0": "405nm",
-        "1": "488nm", 
-        "2": "561nm",
-        "3": "640nm"
-    }
-    
-    # 3D model settings
-    mesh_scale_factor: float = 10.0  # Mesh units are in 10um
-    image_resolution_um: float = 10.0  # Image resolution at level 0
-    
-    # Performance settings
-    max_concurrent_requests: int = 100
-    request_timeout: int = 30
-    
-    # Logging settings
+
+    # Logging
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    
-    # Pydantic v2 configuration
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
-        extra="ignore"  # Ignore extra environment variables
+        extra="ignore",
     )
-        
-    def get_specimen_path(self, specimen_id: str) -> Path:
-        """Get the path to a specific specimen directory"""
-        # During migration we support legacy specimen identifiers that used
-        # 'macaque_brain_RM009' while actual data layout is
-        # data/macaque_brain/RM009.vsr/...
-        # Provide a simple mapping for known specimens so existing tests pass.
-        if specimen_id == 'macaque_brain_RM009':
-            return self.data_root_path / 'macaque_brain' / 'RM009.vsr'
-        return self.data_root_path / specimen_id
-    
-    def get_image_path(self, specimen_id: str) -> Path:
-        """Get the path to the image file for a specimen"""
-        return self.get_specimen_path(specimen_id) / "image.ims"
-    
-    def get_atlas_path(self, specimen_id: str) -> Path:
-        """Get the path to the atlas file for a specimen"""
-        return self.get_specimen_path(specimen_id) / "atlas.ims"
-    
-    def get_model_path(self, specimen_id: str) -> Path:
-        """Get the path to the 3D model file for a specimen"""
-        return self.get_specimen_path(specimen_id) / "brain_shell.obj"
-    
-    def get_regions_file(self) -> Path:
-        """Get the path to the regions JSON file"""
-        return self.atlas_civm_path / "macaque_brain_regions.json"
 
 
-# Global settings instance
 settings = Settings()
 
-
-## Legacy specimen configuration helpers removed.
-## The redesigned API now exclusively relies on the dynamic specimens metadata
-## JSON file located under data_root/specimens instead of static in-code
-## configurations. If needed in the future, they can be restored from git history.
