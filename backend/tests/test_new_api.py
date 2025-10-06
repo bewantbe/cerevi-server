@@ -44,7 +44,7 @@ def test_metadata_regions():
     assert 'regions' in data or 'hierarchy' in data or isinstance(data, dict)
 
 
-@pytest.mark.parametrize('view_token', ['xz', 'yz', 'xy'])
+@pytest.mark.parametrize('view_token', ['xz', 'yz', 'xy', '3d'])
 def test_data_image_tile(view_token):
     # Attempt to fetch tile at origin for level 0 channel 0
     data_id = f'RM009:img{view_token}:1:0:0,0,0'
@@ -56,8 +56,20 @@ def test_data_image_tile(view_token):
         pytest.skip('View unsupported in current test data')
     else:
         assert r.status_code == 200
-        # JPEG content for image modalities
-        assert r.headers['content-type'] in ('image/jpeg', 'image/jpg', 'application/octet-stream')
+        # JPEG content for image modalities or raw bytestream
+        ct = r.headers.get('content-type', '')
+        assert ct in ('image/jpeg', 'image/jpg', 'application/octet-stream')
+
+        # If server returned raw bytestream for image tiles (octet-stream),
+        # ensure expected uncompressed size. 2 bytes per voxel/pixel.
+        if ct == 'application/octet-stream':
+            if view_token == '3d':
+                # 3D tile/block: 64x64x64 voxels
+                expected = 64 * 64 * 64 * 2
+            else:
+                # 2D tile: 512x512 pixels
+                expected = 512 * 512 * 2
+            assert len(r.content) == expected
 
 
 def test_data_mask_tile():
