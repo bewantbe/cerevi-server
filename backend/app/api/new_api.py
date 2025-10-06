@@ -69,5 +69,6 @@ async def fetch_data_piece(data_id: str):
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        print(e)
         logger.exception("Failed to serve data")
         raise HTTPException(status_code=500, detail='Internal error serving data')

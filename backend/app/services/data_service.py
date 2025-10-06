@@ -46,7 +46,7 @@ import re
 import logging
 import numpy as np
 
-from PIL import Image
+import PIL.Image
 from io import BytesIO
 import h5py
 import zarr
@@ -236,27 +236,34 @@ class DataService:
             raise ValueError("Invalid view_type for tile size")
 
     def _read_tile(self, img_path: Path, view_type: str, param: Tuple) -> np.ndarray:
+        zyx = param[-2]
         tile_size_0 = param[-1]
         if view_type == "xy":
             tile_size = (1, tile_size_0[0], tile_size_0[1])
+            roi = [slice(zyx[i], zyx[i] + tile_size[i]) for i in range(3)]
+            roi[0] = zyx[0]
         elif view_type == "yz":
             tile_size = (tile_size_0[0], tile_size_0[1], 1)
+            roi = [slice(zyx[i], zyx[i] + tile_size[i]) for i in range(3)]
+            roi[2] = zyx[2]
         elif view_type == "xz":
             tile_size = (tile_size_0[0], 1, tile_size_0[1])
+            roi = [slice(zyx[i], zyx[i] + tile_size[i]) for i in range(3)]
+            roi[1] = zyx[1]
         elif view_type == "3d":
             tile_size = tile_size_0
+            roi = [slice(zyx[i], zyx[i] + tile_size[i]) for i in range(3)]
         else:
             raise ValueError(f"Unsupported view_type: {view_type}")
-        zyx = param[-2]
-        roi = tuple(slice(zyx[i], zyx[i] + tile_size[i]) for i in range(3))
+        #print(f"Reading tile from {img_path} at {roi} for view {view_type}")
         if img_path.suffix == '.ims':
             with h5py.File(img_path, 'r') as h5f:
                 harray = h5f[param[0]][param[1]][param[2]][param[3]][param[4]]
-                tile = harray[roi]
+                tile = harray[tuple(roi)]
         elif img_path.suffix == '.zarr':
-            with zarr.open(img_path, mode='r') as zf:
-                za = zf[param[0]]
-                tile = za[param[1], *roi]
+            zf = zarr.open(img_path, mode='r')
+            za = zf[param[0]]
+            tile = za[param[1], *roi]
         else:
             raise ValueError(f"Unsupported image file format: {img_path.suffix}")
         return tile
@@ -291,7 +298,7 @@ class DataService:
             # Convert to uint8 for PNG (may lose some labels if >255)
             assert tile.dtype == np.uint8
             msk_uint8 = tile
-            img_pil = Image.fromarray(msk_uint8, mode='P')  # take first slice in z
+            img_pil = PIL.Image.fromarray(msk_uint8, mode='P')
             with BytesIO() as output:
                 img_pil.save(output, format="PNG")
                 return output.getvalue()

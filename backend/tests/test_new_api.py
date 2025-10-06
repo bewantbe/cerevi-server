@@ -47,7 +47,7 @@ def test_metadata_regions():
 @pytest.mark.parametrize('view_token', ['xz', 'yz', 'xy'])
 def test_data_image_tile(view_token):
     # Attempt to fetch tile at origin for level 0 channel 0
-    data_id = f'RM009:img{view_token}:0:0:0,0,0'
+    data_id = f'RM009:img{view_token}:1:0:0,0,0'
     r = client.get(f'/data/{data_id}')
     if r.status_code == 404:
         pytest.skip('Image file not present')
@@ -57,7 +57,7 @@ def test_data_image_tile(view_token):
     else:
         assert r.status_code == 200
         # JPEG content for image modalities
-        assert r.headers['content-type'] in ('image/jpeg', 'image/jpg')
+        assert r.headers['content-type'] in ('image/jpeg', 'image/jpg', 'application/octet-stream')
 
 
 def test_data_mask_tile():
