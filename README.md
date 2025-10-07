@@ -41,7 +41,7 @@ Examples:
 ```
 GET /data/RM009:imgxy:0:0:43200,512,1536  # xy plane image tile (RAW by default)
 GET /data/RM009:mskxy:0:0:43200,512,1536  # xy mask tile (RAW)
-GET /data/RM009:meh3:::v1                 # Mesh (OBJ text)
+GET /data/RM009:meh3d:::v1                # Mesh (OBJ text)
 ```
 
 Legacy `/api/*` endpoints (specimens, tiles, regions, metadata) were removed in favor of this contract.
