@@ -10,7 +10,6 @@ from pathlib import Path
 import argparse
 import logging
 
-import requests
 import numpy as np
 import zarr
 from numcodecs import Blosc
@@ -27,22 +26,11 @@ if not logger.handlers:
     logger.addHandler(ch)
 
 def get_shard_chunk_index_from(coor, shard_sz, chunk_sz):
-    s_idx = (coor[0] // shard_sz[0],
-             coor[1] // shard_sz[1],
-             coor[2] // shard_sz[2],
-             coor[3] // shard_sz[3])
-    c_idx = ((coor[0] % shard_sz[0]) // chunk_sz[0],
-             (coor[1] % shard_sz[1]) // chunk_sz[1],
-             (coor[2] % shard_sz[2]) // chunk_sz[2],
-             (coor[3] % shard_sz[3]) // chunk_sz[3])
-    resedual = (coor[0] % shard_sz[0] % chunk_sz[0],
-                coor[1] % shard_sz[1] % chunk_sz[1],
-                coor[2] % shard_sz[2] % chunk_sz[2],
-                coor[3] % shard_sz[3] % chunk_sz[3])
-    assert shard_sz[0]*s_idx[0] + chunk_sz[0]*c_idx[0] + resedual[0] == coor[0]
-    assert shard_sz[1]*s_idx[1] + chunk_sz[1]*c_idx[1] + resedual[1] == coor[1]
-    assert shard_sz[2]*s_idx[2] + chunk_sz[2]*c_idx[2] + resedual[2] == coor[2]
-    assert shard_sz[3]*s_idx[3] + chunk_sz[3]*c_idx[3] + resedual[3] == coor[3]
+    s_idx = tuple(coor[i] // shard_sz[i] for i in range(len(coor)))
+    c_idx = tuple((coor[i] % shard_sz[i]) // chunk_sz[i] for i in range(len(coor)))
+    resedual = tuple(coor[i] % shard_sz[i] % chunk_sz[i] for i in range(len(coor)))
+    #for i in range(len(coor)):
+    #    assert shard_sz[i]*s_idx[i] + chunk_sz[i]*c_idx[i] + resedual[i] == coor[i]
     return s_idx, c_idx, resedual
 
 def IndexFromStartSize(start, size):
@@ -50,90 +38,83 @@ def IndexFromStartSize(start, size):
 
 class zarr3_reader:
     def __init__(self, zarr_path: str):
-        self.zarr = zarr.open(zarr_path, mode="r")
-        self.shape = self.zarr.shape
-        self.chunk_shape = self.zarr.chunks
-        self.dtype = self.zarr.dtype
+        self.zarr_path = Path(zarr_path)
+        if not self.zarr_path.exists():
+            raise FileNotFoundError(f"Zarr path {self.zarr_path} does not exist.")
+        if not (self.zarr_path / 'zarr.json').exists():
+            raise FileNotFoundError(f"Zarr metadata file {self.zarr_path / 'zarr.json'} does not exist.")
 
-def test_of_concept(zarr_path, res_lv, coor):
-    zarr_path = Path(zarr_path)
-    print(f"Testing zarr path {zarr_path}")
-    
-    if not zarr_path.exists():
-        raise FileNotFoundError(f"Zarr path {zarr_path} does not exist.")
-    if not (zarr_path / 'zarr.json').exists():
-        raise FileNotFoundError(f"Zarr metadata file {zarr_path / 'zarr.json'} does not exist.")
+        # read zarr configuration
+        self.za_meta = json.load(open(self.zarr_path / '0' / 'zarr.json'))
+        self.shard_sz     = self.za_meta['chunk_grid']['configuration']['chunk_shape']
+        self.chunk_sz     = self.za_meta['codecs'][0]['configuration']['chunk_shape']
+        self.chunk_codec  = self.za_meta['codecs'][0]['configuration']['codecs'][1]
+        self.index_codecs = self.za_meta['codecs'][0]['configuration']['index_codecs']
+        self.dtype        = np.dtype(self.za_meta['data_type'])
+        self.fill_value   = self.za_meta.get('fill_value', 0)
 
-    # read zarr configuration
+        # currently support only non-compressed index and blosc codec
+        assert self.index_codecs[0]["name"] == "bytes"
+        assert self.index_codecs[1]["name"] == "crc32c"
+        assert self.chunk_codec["name"] == "blosc"
+        self.chunk_codec['configuration']['shuffle'] = \
+            getattr(Blosc, self.chunk_codec['configuration']['shuffle'].upper())
+        self.compressor = Blosc(**self.chunk_codec['configuration'])
+
+        self.index_array_shape = [self.shard_sz[i]//self.chunk_sz[i] for i in range(4)] + [2]
+        self.index_array_bytes = 8 * np.prod(self.index_array_shape)  # uint64
+        self.crc_nbytes = 4
+
+        # cache of opened shard files
+        # self.opened_files = {}
+
+    #def get_za_meta(self, res_lv: str):
+
+    def read_chunk(self, res_lv: str, coor: tuple, b_decode: bool = True):
+        s_idx, c_idx, resedual = get_shard_chunk_index_from(coor, self.shard_sz, self.chunk_sz)
+        assert all(r == 0 for r in resedual), "Only support reading full chunks."
+
+        f_shard_path = self.zarr_path.joinpath(res_lv , 'c' , *map(str, s_idx))
+
+        with open(f_shard_path, 'rb') as fd:
+            fd.seek(-self.index_array_bytes-self.crc_nbytes, os.SEEK_END)
+            index_array = np.frombuffer(fd.read(self.index_array_bytes),
+                                        dtype=np.uint64) \
+                          .reshape(self.index_array_shape)
+            offset, nbytes = index_array[tuple(c_idx)]
+            if offset == UINT64_MAX and nbytes == UINT64_MAX:
+                if b_decode:
+                    img = np.full(self.chunk_sz, self.fill_value, dtype=self.dtype)
+                else:
+                    img = None
+            else:
+                fd.seek(offset, os.SEEK_SET)
+                raw_data = fd.read(nbytes)
+                if b_decode:
+                    img = np.frombuffer(self.compressor.decode(raw_data), dtype=self.dtype) \
+                        .reshape(self.chunk_sz)
+                else:
+                    img = raw_data
+        return img
+
+def test_zarr3_reader(zarr_path, res_lv, coor):
     t1 = time.time()
-    za_meta = json.load(open(zarr_path / res_lv / 'zarr.json'))
+    cz = zarr3_reader(zarr_path)
+    img = cz.read_chunk(res_lv, coor)
     t2 = time.time()
-    logger.debug(f"  Zarr metadata read time: {t2 - t1:.3f} s")
-    chunk_sz    = za_meta['codecs'][0]['configuration']['chunk_shape']
-    shard_sz  = za_meta['chunk_grid']['configuration']['chunk_shape']
-    shard_index_codecs  = za_meta['codecs'][0]['configuration']['index_codecs']
-    chunk_codec_meta = za_meta['codecs'][0]['configuration']['codecs'][1]
-    assert shard_index_codecs[0]["name"] == "bytes"
-    assert shard_index_codecs[1]["name"] == "crc32c"
-    assert chunk_codec_meta["name"] == "blosc"
-    chunk_codec_meta['configuration']['shuffle'] = \
-        getattr(Blosc, chunk_codec_meta['configuration']['shuffle'].upper())
-    compressor = Blosc(**chunk_codec_meta['configuration'])
-    dtype = np.dtype(za_meta['data_type'])
-
-    # compute index for shard and chunk
-    s_idx, c_idx, resedual = get_shard_chunk_index_from(coor, shard_sz, chunk_sz)
-
-    # prepare reading index array
-    index_array_shape = [shard_sz[i]//chunk_sz[i] for i in range(4)] + [2]
-    index_array_bytes = 8 * np.prod(index_array_shape)  # uint64
-    crc_n_bytes = 4
-    #s_morton_idx = encode_morton(c_idx, chunk_sz)
-
-    # shard file path
-    f_shard_path = zarr_path / res_lv / 'c' / \
-        f'{s_idx[0]}' / f'{s_idx[1]}' / f'{s_idx[2]}' / f'{s_idx[3]}'
-    logger.debug(f"  Reading from shard file: {f_shard_path}")
-    logger.debug(f"  inner index: {c_idx}, residual: {resedual};"
-                 f"  indexing array nbytes: {index_array_bytes}")
+    assert np.any(img)
 
     t3 = time.time()
-    logger.debug(f"  metadata parse time: {t3 - t2:.3f} s")
-
-    # the index array is stored at the end of shard data
-    with open(f_shard_path, 'rb') as fd:
-        fd.seek(-index_array_bytes-crc_n_bytes, os.SEEK_END)
-        index_array = np.frombuffer(fd.read(index_array_bytes),
-                                    dtype=np.uint64) \
-                      .reshape(index_array_shape)
-        logger.debug(f"  inner offset: {index_array[tuple(c_idx)][0]},"
-                     f" nbytes: {index_array[tuple(c_idx)][1]}")
-        t4 = time.time()
-        logger.debug(f"  index array read time: {t4 - t3:.3f} s")
-        offset, nbytes = index_array[tuple(c_idx)]
-        if offset == UINT64_MAX and nbytes == UINT64_MAX:
-            img = np.zeros(chunk_sz, dtype=dtype)
-        # read the chunk
-        fd.seek(offset, os.SEEK_SET)
-        raw_data = fd.read(nbytes)
-        img = np.frombuffer(compressor.decode(raw_data), dtype=dtype) \
-            .reshape(chunk_sz)
-        assert np.any(img)
-    
-    t5 = time.time()
-    logger.debug(f"  chunk read time: {t5 - t4:.3f} s")
-
-    # verify using zarr
     za = zarr.open(zarr_path, mode='r')[res_lv]
-    img_zarr = za[IndexFromStartSize(coor, chunk_sz)]
-    t6 = time.time()
-    logger.debug(f"  Zarr read time: {t6 - t5:.3f} s")
-    #print("  direct read: size =", img.shape, " dtype =", img.dtype)
-    #print(img)
-    #print("  zarr read  : size =", img_zarr.shape, " dtype =", img_zarr.dtype)
-    #print(img_zarr)
+    img_zarr = za[IndexFromStartSize(coor, za.chunks)]
+    t4 = time.time()
+    assert np.any(img_zarr)
+
     assert np.all(img == img_zarr)
-    print("  read successfully and verified.")
+
+    print("  read successfully using zarr3_reader.")
+    print(f"  zarr3_reader read time: {t2 - t1:.3f} s")
+    print(f"  zarr read time: {t4 - t3:.3f} s")
 
 if __name__ == "__main__":
     data_root = Path('./data')
@@ -141,4 +122,4 @@ if __name__ == "__main__":
     res_lv = 0
     c = 0
     zyx = (300*128//20, 60000//2//512*512, 70000//2//512*512)
-    test_of_concept(zarr_path, str(res_lv), (c, *zyx))
+    test_zarr3_reader(zarr_path, str(res_lv), (c, *zyx))
