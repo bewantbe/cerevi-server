@@ -95,6 +95,9 @@ def FirstValue(d: Dict[str, Any]) -> Any:
         return None
     return next(iter(d.values()))
 
+def IndexFromROI(roi: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int], Tuple[int, int]] | np.ndarray) -> Tuple[slice]:
+    return tuple(slice(s,e) for s,e in roi)
+
 class DataService:
     """Service for redesigned API interactions."""
 

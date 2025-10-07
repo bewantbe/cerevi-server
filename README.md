@@ -98,7 +98,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r backend/requirements.txt
+PYTHONPATH=backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir backend
+pytest backend/tests/test_new_api.py -v
 ```
 
 (Ensure `DATA_PATH` points to valid specimen and atlas data if you need non-404 responses for image/atlas endpoints.)
