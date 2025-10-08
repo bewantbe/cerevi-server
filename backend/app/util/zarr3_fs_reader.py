@@ -212,15 +212,20 @@ class zarr3_reader:
                             for i in range(len(meta.shard_sz)))
             for s_idx in np.ndindex(shard_grid):
                 shard_path = res_lv / 'c' / '/'.join(map(str, s_idx))
-                print(f"Validating shard {s_idx}")
+                print(f"Validating shard {s_idx}", end='')
                 if not shard_path.exists():
+                    print(", shard file does not exist, skip.")
                     continue
+                t1 = time.time()
                 with open(shard_path, 'rb') as shard_fd:
                     index_array = self._get_index_array(meta, shard_fd, (res_lv.name, s_idx))
+                    cnt_chunks = 0
+                    data_sz = 0
                     for c_idx in np.ndindex(index_array.shape[:-1]):
                         offset, nbytes = index_array[c_idx]
                         if offset == UINT64_MAX and nbytes == UINT64_MAX:
                             continue
+                        cnt_chunks += 1
                         if mode == 'size':
                             continue
                         try:
@@ -228,8 +233,14 @@ class zarr3_reader:
                             raw_data = shard_fd.read(int(nbytes))
                             img = np.frombuffer(meta.compressor.decode(raw_data), dtype=meta.dtype)
                             img = img.reshape(meta.chunk_sz)
+                            data_sz += len(raw_data)
                         except Exception as e:
                             logger.error(f"Error reading chunk at shard {s_idx}, chunk {c_idx} in res_lv {res_lv.name}: {e}")
+                t2 = time.time()
+                if cnt_chunks > 0:
+                    print(f", {cnt_chunks} chunks validated in {t2 - t1:.3f} s, total data read {data_sz / (1024*1024):.3f} MB.")
+                else:
+                    print(f", no chunks to validate.")
 
 def test_zarr3_reader(zarr_path, res_lv, coor):
     t3 = time.time()
