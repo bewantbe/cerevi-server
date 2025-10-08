@@ -237,8 +237,9 @@ class zarr3_reader:
                         except Exception as e:
                             logger.error(f"Error reading chunk at shard {s_idx}, chunk {c_idx} in res_lv {res_lv.name}: {e}")
                 t2 = time.time()
+                sz_rate = data_sz / (1024*1024)
                 if cnt_chunks > 0:
-                    print(f", {cnt_chunks} chunks validated in {t2 - t1:.3f} s, total data read {data_sz / (1024*1024):.3f} MB.")
+                    print(f", {cnt_chunks:4} chunks read in {t2 - t1:.3f} s, total data read {sz_rate:.2f} MB, {sz_rate / (t2 - t1):.3f} MiB/s.")
                 else:
                     print(f", no chunks to validate.")
 
