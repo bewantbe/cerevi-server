@@ -166,6 +166,10 @@ class DataService:
         m = self._IMAGE_TYPE_RE.match(image_type_token)
         if not m:
             raise ValueError(f"Invalid image_type format: {image_type_token}")
+        if (not rl_raw.isdecimal()) and rl_raw.strip() != '':
+            raise ValueError("resolution_level must be an integer or empty")
+        if (not ch_raw.isdecimal()) and ch_raw.strip() != '':
+            raise ValueError("channel must be an integer or empty")
         modality    = m.group('mod')
         encoding    = m.group('enc')
         if encoding is None:

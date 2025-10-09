@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     ]
 
     # Data root (specimens metadata + assets)
-    data_root_path: Path = Field(default_factory=lambda: Path(os.getenv("DATA_PATH", "data")))
+    data_root_path: Path = Field(default_factory=
+        lambda: Path(os.getenv("DATA_ROOT_PATH", "data")))
 
     # Logging
     log_level: str = "INFO"

@@ -6,6 +6,7 @@ underlying data files exist (skip otherwise).
 """
 
 import sys, os, json, gzip
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -44,10 +45,10 @@ def test_metadata_regions():
     assert 'regions' in data or 'hierarchy' in data or isinstance(data, dict)
 
 
-@pytest.mark.parametrize('view_token', ['xz', 'yz', 'xy', '3d'])
+@pytest.mark.parametrize('view_token', ['3d', 'xy', 'xz', 'yz'])
 def test_data_image_tile(view_token):
     # Attempt to fetch tile at origin for level 0 channel 0
-    data_id = f'RM009:img{view_token}:1:0:0,0,0'
+    data_id = f'RM009:img{view_token}:0:0:0,0,0'
     r = client.get(f'/data/{data_id}')
     if r.status_code == 404:
         pytest.skip('Image file not present')
@@ -71,6 +72,46 @@ def test_data_image_tile(view_token):
                 expected = 512 * 512 * 2
             assert len(r.content) == expected
 
+def test_adjacent_image_tiles_overlap_xy():
+    """Verify adjacent XY tiles overlap consistently for float16 raw tiles.
+
+    This test requests two adjacent tiles along X and checks that the right
+    half of the first equals the left half of the second. It uses the same
+    coordinates as the original ad-hoc check and requires octet-stream
+    float16 tiles sized 512x512.
+    """
+    # Resolution level and channel
+    res_lv = 0
+    ch = 0
+    # Use original coordinates (Z,Y,X)
+    zyx = (
+        300 * 128 // 20,
+        (60000 // 2 // 512) * 512,
+        (70000 // 2 // 512) * 512,
+    )
+
+    data_id1 = f"RM009:imgxy:{res_lv}:{ch}:{zyx[0]},{zyx[1]},{zyx[2]}"
+    r1 = client.get(f"/data/{data_id1}")
+    # Do not skip on 404; require data to be present
+    assert r1.status_code == 200, f"Unexpected status for first tile: {r1.status_code}"
+    ct1 = r1.headers.get("content-type", "")
+    assert "application/octet-stream" in ct1, f"Expected raw octet-stream, got {ct1}"
+    assert len(r1.content) == 512 * 512 * 2, "Unexpected payload size for first tile"
+    img1 = np.frombuffer(r1.content, dtype=np.float16).reshape((512, 512))
+
+    # Adjacent tile along X by +256
+    zyx2 = (zyx[0], zyx[1], zyx[2] + 256)
+    data_id2 = f"RM009:imgxy:{res_lv}:{ch}:{zyx2[0]},{zyx2[1]},{zyx2[2]}"
+    r2 = client.get(f"/data/{data_id2}")
+    assert r2.status_code == 200, f"Unexpected status for adjacent tile: {r2.status_code}"
+    ct2 = r2.headers.get("content-type", "")
+    assert "application/octet-stream" in ct2, f"Expected raw octet-stream, got {ct2}"
+    assert len(r2.content) == 512 * 512 * 2, "Unexpected payload size for adjacent tile"
+    img2 = np.frombuffer(r2.content, dtype=np.float16).reshape((512, 512))
+
+    # Basic sanity and overlap consistency
+    assert np.any(img1), "First tile appears empty"
+    assert np.all(img1[:, 256:] == img2[:, :256]), "Adjacent tile overlap mismatch"
 
 def test_data_mask_tile():
     data_id = 'RM009:mskxz:0:0:0,0,0'

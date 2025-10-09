@@ -26,20 +26,6 @@ if not logger.handlers:
     ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
     logger.addHandler(ch)
 
-def sanity_check(url):
-    r1 = requests.get(url)
-    img1 = np.frombuffer(r1.content, dtype=np.float16).reshape((512,512))
-    sp = url.split(",")
-    url2 = ",".join(sp[:-1] + [str(int(sp[-1]) + 256)])
-    r2 = requests.get(url2)
-    img2 = np.frombuffer(r2.content, dtype=np.float16).reshape((512,512))
-    logger.debug("Sanity check for two adjacent tiles...")
-    logger.debug("   %s", url)
-    logger.debug("   %s", url2)
-    assert np.any(img1)
-    assert np.all(img1[:,256:] == img2[:,:256])
-    print("Sanity check passed.")
-
 def fs_throughput_benchmark(zarr_path, res_lv, coor, n_req):
     cz = zarr3_reader(zarr_path)
     data_size = 0
