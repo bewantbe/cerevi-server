@@ -28,6 +28,50 @@ if not logger.handlers:
     ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
     logger.addHandler(ch)
 
+# from https://github.com/zarr-developers/zarr-python/blob/main/src/zarr/core/indexing.py
+def decode_morton(z: int, chunk_shape: tuple[int, ...]) -> tuple[int, ...]:
+    # Inspired by compressed morton code as implemented in Neuroglancer
+    # https://github.com/google/neuroglancer/blob/master/src/neuroglancer/datasource/precomputed/volume.md#compressed-morton-code
+    bits = tuple(math.ceil(math.log2(c)) for c in chunk_shape)
+    max_coords_bits = max(bits)
+    input_bit = 0
+    input_value = z
+    out = [0] * len(chunk_shape)
+
+    for coord_bit in range(max_coords_bits):
+        for dim in range(len(chunk_shape)):
+            if coord_bit < bits[dim]:
+                bit = (input_value >> input_bit) & 1
+                out[dim] |= bit << coord_bit
+                input_bit += 1
+    return tuple(out)
+
+# from AI
+def encode_morton(coords: tuple[int, ...], chunk_shape: tuple[int, ...]) -> int:
+    """
+    Inverse of decode_morton: interleave the bits of coords (LSB-first per coordinate)
+    in the same order decode_morton reads them, producing an integer z.
+    """
+    if len(coords) != len(chunk_shape):
+        raise ValueError("coords and chunk_shape must have same length")
+    bits = tuple(math.ceil(math.log2(c)) if c > 1 else 1 for c in chunk_shape)
+    max_coords_bits = max(bits)
+    z = 0
+    out_bit = 0
+    for coord_bit in range(max_coords_bits):
+        for dim in range(len(coords)):
+            if coord_bit < bits[dim]:
+                bit = (coords[dim] >> coord_bit) & 1
+                z |= (bit << out_bit)
+                out_bit += 1
+    return z
+
+def test_morton_indexing():
+    shape = (15, 256,256)
+    for coords in itertools.product(*(range(s) for s in shape)):
+        z = encode_morton(coords, shape)
+        assert decode_morton(z, shape) == coords
+
 def coor_to_shard_chunk_index(coor, shard_sz, chunk_sz):
     s_idx = tuple(coor[i] // shard_sz[i] for i in range(len(coor)))
     c_idx = tuple((coor[i] % shard_sz[i]) // chunk_sz[i] for i in range(len(coor)))
@@ -239,7 +283,7 @@ class zarr3_reader:
                 t2 = time.time()
                 sz_rate = data_sz / (1024*1024)
                 if cnt_chunks > 0:
-                    print(f", {cnt_chunks:4} chunks read in {t2 - t1:.3f} s, total data read {sz_rate:.2f} MB, {sz_rate / (t2 - t1):.3f} MiB/s.")
+                    print(f", {cnt_chunks:4} chunks read in {t2 - t1:.3f} s, total data read {sz_rate:5.2f} MB, {sz_rate / (t2 - t1):6.3f} MiB/s.")
                 else:
                     print(f", no chunks to validate.")
 
