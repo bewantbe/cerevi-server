@@ -98,6 +98,9 @@ def FirstValue(d: Dict[str, Any]) -> Any:
 def IndexFromROI(roi: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int], Tuple[int, int]] | np.ndarray) -> Tuple[slice]:
     return tuple(slice(s,e) for s,e in roi)
 
+def IndexFromStartSize(start, size):
+    return tuple(slice(start[i], start[i]+size[i]) for i in range(len(start)))
+
 class DataService:
     """Service for redesigned API interactions."""
 
@@ -270,11 +273,11 @@ class DataService:
             zf = zarr.open(img_path, mode='r')
             za = zf[param[0]]
             tile = za[param[1], *roi]
-            #print(tile.shape, tile_size)
+            #print(tile.shape, tile_size, tile_size_0)
             if tile.shape != tile_size_0:
                 tile1 = tile
-                tile = np.full(tile_size, 0, dtype=tile.dtype)
-                tile[tile1.shape] = tile1
+                tile = np.full(tile_size_0, 0, dtype=tile.dtype)
+                tile[IndexFromStartSize(np.zeros_like(tile1.shape), tile1.shape)] = tile1
         else:
             raise ValueError(f"Unsupported image file format: {img_path.suffix}")
         return tile
@@ -299,9 +302,11 @@ class DataService:
             if not parsed.encoding == 'raw':
                 raise ValueError("Only raw encoding supported for img")
             #img = np.clip(tile - 100, 0, 65500)          # remove background
+            print(tile.max(), tile.min(), tile.dtype)
             img = tile / 65535.0
             img_fp32 = img.astype(np.float32)
             img_fp16 = img_fp32.astype(np.float16)
+            print(img_fp16.max(), img_fp16.min(), img_fp16.dtype)
             return img_fp16.tobytes()
         elif parsed.modality == 'msk':
             if not parsed.encoding == 'png':
