@@ -235,9 +235,9 @@ class DataService:
         first_entry = FirstValue(images)
         # Try tile_size_2d first element; fall back to 512
         if view_type == '3d':
-            return first_entry.get('tile_size_3d')
+            return tuple(first_entry.get('tile_size_3d'))
         elif view_type in ('xy', 'yz', 'xz'):
-            return first_entry.get('tile_size_2d')
+            return tuple(first_entry.get('tile_size_2d'))
         else:
             raise ValueError("Invalid view_type for tile size")
 
@@ -270,6 +270,11 @@ class DataService:
             zf = zarr.open(img_path, mode='r')
             za = zf[param[0]]
             tile = za[param[1], *roi]
+            #print(tile.shape, tile_size)
+            if tile.shape != tile_size_0:
+                tile1 = tile
+                tile = np.full(tile_size, 0, dtype=tile.dtype)
+                tile[tile1.shape] = tile1
         else:
             raise ValueError(f"Unsupported image file format: {img_path.suffix}")
         return tile
@@ -293,7 +298,8 @@ class DataService:
         if parsed.modality == 'img':
             if not parsed.encoding == 'raw':
                 raise ValueError("Only raw encoding supported for img")
-            img = np.clip(tile - 100, 0, 65500)          # remove background
+            #img = np.clip(tile - 100, 0, 65500)          # remove background
+            img = tile / 65535.0
             img_fp32 = img.astype(np.float32)
             img_fp16 = img_fp32.astype(np.float16)
             return img_fp16.tobytes()
