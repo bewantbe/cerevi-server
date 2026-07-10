@@ -1,20 +1,7 @@
-"""
-Pytest configuration for VISoR Platform backend tests
-"""
-import sys
+"""Pytest configuration."""
+
 import os
-import pytest
+import sys
 
-# Add backend to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-@pytest.fixture(scope="session")
-def backend_path():
-    """Get the backend directory path"""
-    return os.path.join(os.path.dirname(__file__), '..')
-
-@pytest.fixture(scope="session") 
-def data_path():
-    """Get the data directory path"""
-    backend_dir = os.path.join(os.path.dirname(__file__), '..')
-    return os.path.join(backend_dir, '..', 'data')
+# Ensure backend root is importable as `app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

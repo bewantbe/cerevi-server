@@ -1,99 +1,91 @@
-"""
-Main FastAPI application for VISoR Platform
-"""
+"""FastAPI entrypoint for cerevi-server."""
+
+from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+
+import httpx
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .middleware.conditional_gzip import ConditionalGZipMiddleware
 from fastapi.responses import JSONResponse
-import uvicorn
 
+from .api import registry_routes, zarr_gateway
 from .config import settings
-from .api import new_api
+from .services.proxy import JsonCache
+from .services.registry import load_registry
 
-# Configure logging
-logging.basicConfig(
-    level  = getattr(logging, settings.log_level),
-    format = settings.log_format
-)
+logging.basicConfig(level=getattr(logging, settings.log_level), format=settings.log_format)
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events"""
-    # FastAPI app startup
-    logger.info(f"Starting {settings.app_name}, version {settings.app_version}")
-    logger.info(f"Data path: {settings.data_root_path}")
-    logger.info(f"Debug mode: {settings.debug}")
-    
-    yield
-    
-    # FastAPI app shutdown
-    logger.info(f"Shutting down {settings.app_name} API")
-
-# Create FastAPI application
-app = FastAPI(
-    title       = settings.app_name,
-    version     = settings.app_version,
-    description = settings.app_description,
-    docs_url    = "/docs" if settings.debug else None,
-    redoc_url   = "/redoc" if settings.debug else None,
-    lifespan    = lifespan
-)
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins     = settings.cors_origins,
-    allow_credentials = True,
-    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers     = ["*"],
-)
-
-# Enable automatic gzip compression for responses when the client supports it.
-# Minimum size controls when compression is applied (in bytes).
-app.add_middleware(ConditionalGZipMiddleware, minimum_size=1024)
-
-# Global exception handler
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler"""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
+    logger.info("Starting %s v%s", settings.app_name, settings.app_version)
+    logger.info(
+        "DC_HELPER_URL=%s data_root=%s",
+        settings.dc_helper_url or "<unset>",
+        settings.data_root,
     )
 
-# Health check endpoint
+    # Registry is required to start.
+    registry_path = settings.data_root / "specimens.json"
+    app.state.registry = load_registry(registry_path)
+    logger.info("Loaded registry: %d entries", len(app.state.registry.root))
+
+    app.state.zarr_meta_cache = JsonCache(ttl_seconds=settings.zarr_metadata_cache_ttl)
+
+    limits = httpx.Limits(max_connections=settings.proxy_max_connections)
+    app.state.http_client = httpx.AsyncClient(timeout=settings.proxy_timeout, limits=limits)
+    try:
+        yield
+    finally:
+        await app.state.http_client.aclose()
+        logger.info("Shutting down")
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+
+@app.exception_handler(Exception)
+async def _on_unhandled(request, exc):
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
+def health() -> dict[str, object]:
     return {
         "status": "healthy",
         "version": settings.app_version,
-        "data_root_path_exists": settings.data_root_path.exists()
+        "dc_helper_configured": bool(settings.dc_helper_url),
     }
 
-# Root endpoint
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": settings.app_name,
-        "version": settings.app_version,
-        "docs": "/docs" if settings.debug else "Documentation disabled in production"
-    }
 
-# Include redesigned unified endpoints (no /api prefix)
-app.include_router(new_api.router, tags=[settings.app_api_version])
+app.include_router(registry_routes.router)
+app.include_router(zarr_gateway.router)
+
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
-        host      = settings.host,
-        port      = settings.port,
-        reload    = settings.debug,
-        log_level = settings.log_level.lower()
+        "app.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug,
+        log_level=settings.log_level.lower(),
     )

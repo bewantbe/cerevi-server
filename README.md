@@ -4,47 +4,28 @@
 
 This backend now implements a unified, minimal API surface:
 
+CM005 is the default specimen. CM005, RM009, and BB001 are the reviewed imaging entries; MW001 and dMRI_CIVM remain placeholders for now.
+
 Endpoints:
 
 * `GET /health` – Health probe.
-* `GET /metadata?type=specimens` – Returns specification (metadata) of images for each specimen. In backend it is the raw contents of `data/specimens`.
-* `GET /metadata?type=regions&specimen={specimen_id}` – Returns region hierarchy JSON for the specimen. Currently CIVM atlas JSON.
-* `GET /data/{data_id}` – Fetch imagery / mask tiles / mesh using composite identifier. Return image size is described in `/metadata?type=specimens`.
-
-`data_id` format:
-```
-{specimen_id}:{image_type}:{resolution_level}:{channel}:{index}
-
-specimen_id = RM009 | ...
-    Obtained from `/metadata?type=specimens`
-
-image_type = {modality}{view_type}[-{encoding}]
-    * modality: img | msk | meh
-        Query `/metadata?type=specimens` for availability, img = "image", msk = "region_mask", meh = "mesh"
-    * view_type: xy | yz | xz | 3d
-    * encoding: optional (raw | zstd_sqrt_v1 | textr | obj | ...)
-        Query `/metadata?type=specimens` for availability, "encoding_2d_list", "encoding_3d_list", "encoding_list".
-        If omitted, defaults to "raw" for img and msk, "obj" for meh.
-
-resolution_level = 0, 1, 2, ...
-    usually 0 = highest resolution, see `resolution_um_list` in `/metadata?type=specimens`
-
-channel = 0, 1, 2, ...
-    See 'channels' in `/metadata?type=specimens`.
-
-index = {z},{y},{x} | {region_name} | {region_name},{z} ...
-    For 2D tiles and 3D blocks: z,y,x (voxel position).
-    For meshes: region_name (e.g. "brain_shell", "v1"), or {region_name},{z} (2D region at specific z-plane).
-```
+* `GET /registry/specimens` – Lists specimens and atlas placeholders. CM005 is the default first specimen.
+* `GET /registry/specimens/{specimen_id}` – Returns one specimen or atlas summary.
+* `GET /ome-zarr/{specimen_id}/{kind}/{variant}/{mode}/...` – Serves virtual OME-Zarr groups, arrays, and chunks.
+* `GET /meshes/{specimen_id}/{variant}/{region}.obj` – Serves OBJ meshes declared in `metadata/specimens.json`.
+* `GET /specimens/{specimen_id}/atlas` and `GET /atlas/{atlas_id}/regions.json` – Resolve and proxy atlas regions when a specimen has an atlas reference.
 
 Examples:
 ```
-GET /data/RM009:imgxy:0:0:43200,512,1536  # xy plane image tile (RAW by default)
-GET /data/RM009:mskxy:0:0:43200,512,1536  # xy mask tile (RAW)
-GET /data/RM009:meh3d:::v1                # Mesh (OBJ text)
+GET /registry/specimens
+GET /ome-zarr/CM005/image/recon-20260513/3d/zarr.json
+GET /ome-zarr/CM005/image/recon-20260513/xz/0/zarr.json
+GET /meshes/CM005/v20260602/brain_shell.obj
 ```
 
 Legacy `/api/*` endpoints (specimens, tiles, regions, metadata) were removed in favor of this contract.
+
+Specimen registry responses include `imageMetadata`, keyed by image variant name. Each value mirrors the image metadata attached in `metadata/specimens.json`, including channels, physical size, voxel/tile settings, axes order, and declared encodings.
 
 ## Contents
 
@@ -66,7 +47,7 @@ docker-compose up --build -d
 curl http://localhost:8000/health | jq
 
 # Specimens metadata
-curl -s 'http://localhost:8000/metadata?type=specimens' | jq
+curl -s 'http://localhost:8000/registry/specimens' | jq
 ```
 
 To rebuild cleanly:
@@ -86,7 +67,7 @@ docker-compose down -v
 
 If use of SSHFS is desired
 ```bash
-sudo sshfs autocv172:/mnt/share_read_only/cerevi ~/code/cerevi-server/data -o allow_other
+sudo sshfs autocv172:/mnt/share_read_only/cerevi ~/code/cerevi-server/metadata -o allow_other
 # then docker-compose up backend
 # otherwise you get mkdir file exists error
 ```
@@ -124,7 +105,7 @@ Some tests may skip if large data files aren't present.
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `DEBUG` | Enable docs & reload | `false` |
-| `DATA_PATH` | Path inside container to data assets | `/app/data` |
+| `DATA_PATH` | Path inside container to data assets | `/app/metadata` |
 | `REDIS_URL` | Redis connection string (empty disables) | `redis://redis:6379` |
 
 ## Data Directory Layout
@@ -139,35 +120,74 @@ cerevi/
      │         ├── macaque_brain_regions.xlsx            # Source atlas data (names as Excel, for generating json only)
      │         ├── atlas.ims   (not yet)                 # Brain region masks (brain area ID as pixel)
      │         └── copyright                             # Attribution and copyright information
-     └──RM009
+    └── CM005
          ├── MRI
          │    └── ...
-         ├── VISoR-ims
-         │    ├── resampled_10um.ims
-         │    └── mask_v1.ims                            # Brain region masks (brain area ID as pixel)
          ├── VISoR-tif
          │    └── ... 
          └── VISoR
-              └── RM009.vsr                              # RM009 specimen data (entity-based organization)
-                   ├── visor_recon_images                # 
-                   │    └── yzj_brain_10x_20250904.zarr  # Multi-resolution image data, master tape
-                   ├── visor_projn_images                # 
-                   │    ├── xy.zarr                      # optimized for xy-section access
-                   │    ├── yz.zarr                      # optimized for yz-section access
-                   │    └── xz.zarr                      # optimized for xz-section access
-                   ├── visor_h265_images                 # 
-                   │    └── 3d.zarr                      # optimized for volumetric access, e.g. codec ktx2
-                   ├── visor_mesh
-                   │    └── brain_shell.obj              # 3D brain surface model
-                   ├── info.json                         # Basic information about the specimen
-                   ├── metadata.json                     # custom metadata
-                   └── copyright                         # Attribution and copyright information
+            └── CM005.vsr                             # default CM005 specimen data
+                ├── visor_recon_images
+                │    └── lzc_whole_brain_20260513.zarr
+                ├── visor_projn_images
+                │    ├── yzj_xy_20260527.zarr
+                │    ├── yzj_xz_20260527.zarr
+                │    └── yzj_yz_20260527.zarr
+                └── visor_mesh
+                    └── brain_shell.obj      # 3D brain surface model
+```
+
+## Remote Data Filename Update Checklist
+
+Use `metadata/specimens.json` as the source of truth. On the remote data root served by `cerevi-dc-helper`, every `files[]` path must exist exactly, including case and dates.
+
+```bash
+DATA_ROOT=/path/to/cerevi-data
+cd "$DATA_ROOT"
+
+# Rename only when the existing file is the same asset under an old name.
+[[ -f macaque_brain/CM005/VISoR/CM005.vsr/visor_mesh/brain.obj \
+    && ! -f macaque_brain/CM005/VISoR/CM005.vsr/visor_mesh/brain_shell.obj ]] \
+    && mv macaque_brain/CM005/VISoR/CM005.vsr/visor_mesh/brain.obj \
+        macaque_brain/CM005/VISoR/CM005.vsr/visor_mesh/brain_shell.obj
+[[ -f macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_shell.obj \
+    && ! -f macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_xyy_20260130.obj ]] \
+    && mv macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_shell.obj \
+        macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_xyy_20260130.obj
+
+# Mesh filenames expected by the current registry.
+test -f macaque_brain/CM005/VISoR/CM005.vsr/visor_mesh/brain_shell.obj
+test -f macaque_brain/RM009/VISoR/RM009.vsr/visor_mesh/brain_xyy_20260130.obj
+test -f human_brain/BB001/VISoR/BB001.vsr/visor_mesh/brain.obj
+
+# Image directories expected by the current registry.
+test -d macaque_brain/CM005/VISoR/CM005.vsr/visor_recon_images/lzc_whole_brain_20260513.zarr
+test -d macaque_brain/CM005/VISoR/CM005.vsr/visor_projn_images/yzj_xy_20260527.zarr
+test -d macaque_brain/CM005/VISoR/CM005.vsr/visor_projn_images/yzj_xz_20260527.zarr
+test -d macaque_brain/CM005/VISoR/CM005.vsr/visor_projn_images/yzj_yz_20260527.zarr
+test -d macaque_brain/RM009/VISoR/RM009.vsr/visor_recon_images/ycy_whole_brain_20251109.zarr
+test -d macaque_brain/RM009/VISoR/RM009.vsr/visor_projn_images/xyy_xy_20251208.zarr
+test -d macaque_brain/RM009/VISoR/RM009.vsr/visor_projn_images/xyy_xz_20251209.zarr
+test -d macaque_brain/RM009/VISoR/RM009.vsr/visor_projn_images/xyy_yz_20251209.zarr
+test -d human_brain/BB001/VISoR/BB001.vsr/visor_recon_images/yzj_half_brain_20260616.zarr
+test -d human_brain/BB001/VISoR/BB001.vsr/visor_projn_images/yzj_xy_20260616.zarr
+test -d human_brain/BB001/VISoR/BB001.vsr/visor_projn_images/yzj_xz_20260616.zarr
+test -d human_brain/BB001/VISoR/BB001.vsr/visor_projn_images/yzj_yz_20260616zarr
+```
+
+After renaming or syncing assets, restart `cerevi-dc-helper` and `cerevi-server`, then smoke-test the paths through the API:
+
+```bash
+curl -f http://localhost:8000/registry/specimens
+curl -f http://localhost:8000/meshes/CM005/v20260602/brain_shell.obj >/dev/null
+curl -f http://localhost:8000/ome-zarr/CM005/image/recon-20260513/3d/zarr.json >/dev/null
+curl -f http://localhost:8000/ome-zarr/BB001/image/recon-20260527/xy/zarr.json >/dev/null
 ```
 
 
 ## Migration Notes
 
-The refactor removed legacy routers; only `/health`, `/metadata`, and `/data/{data_id}` remain. Client applications must construct `data_id` strings per the schema above. Tile size derives from each entry's `tile_size_2d` in `data/specimens`.
+The refactor removed legacy `/api/*`, `/metadata`, and `/data/{data_id}` routers. Client applications should use `/registry/*` for availability, `/ome-zarr/*` for image and mask arrays, `/meshes/*` for OBJ surfaces, and atlas routes only for specimens that declare an atlas reference.
 
 ## Next Steps (Optional Enhancements)
 - Provide mock data fixtures for fully offline test runs
